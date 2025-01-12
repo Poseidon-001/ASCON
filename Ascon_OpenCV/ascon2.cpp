@@ -237,7 +237,7 @@ string toHex(int val)
 
 int main()
 {
-    std::string path = "./image/video_1.mp4";
+    std::string path = "./video_1.mp4";
     cv::VideoCapture videoFace_data(path);
 
     if (!videoFace_data.isOpened())
@@ -305,8 +305,8 @@ int main()
             {
                 fixed_size = cv::Size(w, h);
                 std::cout << "fixed_size: " << fixed_size << std::endl;
-                video_writer.open("./image/encrypt_dot_color_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
-                decrypted_video_writer.open("./image/decrypted_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
+                video_writer.open("./encrypt_dot_color_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
+                decrypted_video_writer.open("./decrypted_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
                 if (!video_writer.isOpened() || !decrypted_video_writer.isOpened())
                 {
                     std::cerr << "Error opening video writer" << std::endl;
