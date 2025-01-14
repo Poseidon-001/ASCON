@@ -160,6 +160,28 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     *result = std::memcmp(t, &s.x[3], 16) == 0 ? 0 : -1;
 }
 
+// Helper function to convert integer to hex string
+string toHex(int val)
+{
+    stringstream ss;
+    ss << setfill('0') << setw(2) << hex << val;
+    return ss.str();
+}
+
+// Helper function to convert hex string to byte array
+void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
+{
+    bytes.resize(hex.length() / 2);
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
+        std::stringstream ss;
+        ss << std::hex << hex.substr(2 * i, 2);
+        int byte;
+        ss >> byte;
+        bytes[i] = static_cast<uint8_t>(byte);
+    }
+}
+
 // ...existing code...
 
 int main()
