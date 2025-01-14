@@ -19,7 +19,6 @@
 
 using namespace cv;
 using namespace std;
-namespace fs = std::filesystem;
 
 // Helper functions
 __device__ void ascon_permutation(ascon_state_t *s, int rounds);
@@ -163,30 +162,34 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
 
 // ...existing code...
 
-int main() {
-    cv::VideoCapture videoFace_data(0); // Use 0 for the default webcam
+int main()
+{
+    std::string path = "./image/video_1.mp4";
+    cv::VideoCapture videoFace_data(path);
 
-    if (!videoFace_data.isOpened()) {
-        std::cerr << "Unable to open webcam" << std::endl;
+    if (!videoFace_data.isOpened())
+    {
+        std::cerr << "Unable to open face detected video" << std::endl;
         return -1;
     }
 
     int fps = 24;
+    int total_frames = fps * 3;
     int frame_delay = 1000 / fps;
 
     cv::CascadeClassifier face_cascade;
-    if (!face_cascade.load(cv::samples::findFile("haarcascade_frontalface_alt2.xml"))) {
+    if (!face_cascade.load(cv::samples::findFile("haarcascade_frontalface_alt2.xml")))
+    {
         std::cerr << "Error loading face cascade" << std::endl;
         return -1;
     }
 
-    cv::Size fixed_size(200, 200); // Set a fixed size for the ROI
+    cv::Size fixed_size;
     int frame_count = 0;
-    int no_face_count = 0; // Counter for frames with no face detected
-    const int max_no_face_frames = 30; // Maximum number of consecutive frames with no face before stopping
 
     std::ofstream output_file("face_detection.txt");
-    if (!output_file.is_open()) {
+    if (!output_file.is_open())
+    {
         std::cerr << "Unable to open file for writing" << std::endl;
         return -1;
     }
@@ -201,56 +204,75 @@ int main() {
     for (auto &byte : nonce)
         byte = dis(gen);
 
-    // Output folder path
-    std::string output_folder = "E:\\ASCON\\Flow\\FLow_ascon\\image";
-
-    // Initialize video writers
-    cv::VideoWriter dot_video_writer(output_folder + "\\dot_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
-    cv::VideoWriter face_video_writer(output_folder + "\\face_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, cv::Size((int)videoFace_data.get(cv::CAP_PROP_FRAME_WIDTH), (int)videoFace_data.get(cv::CAP_PROP_FRAME_HEIGHT)));
-
-    if (!dot_video_writer.isOpened() || !face_video_writer.isOpened()) {
-        std::cerr << "Error opening video writers" << std::endl;
-        return -1;
-    }
+    cv::VideoWriter video_writer;
+    cv::VideoWriter decrypted_video_writer;
 
     auto total_start = std::chrono::steady_clock::now();
 
-    while (videoFace_data.isOpened()) {
+    while (videoFace_data.isOpened() && frame_count < total_frames)
+    {
         auto frame_start = std::chrono::steady_clock::now();
 
         cv::Mat frame;
         videoFace_data >> frame;
-        if (frame.empty()) {
+        if (frame.empty())
+        {
             break;
         }
 
-        // Write the original frame to the face video
-        face_video_writer.write(frame);
-
-        // Define a fixed ROI in the center of the frame
-        int x = (frame.cols - fixed_size.width) / 2;
-        int y = (frame.rows - fixed_size.height) / 2;
-        cv::Rect roi(x, y, fixed_size.width, fixed_size.height);
-
-        // Crop the frame to the fixed ROI
-        cv::Mat face_crop = frame(roi);
-
         std::vector<cv::Rect> faces;
-        face_cascade.detectMultiScale(face_crop, faces, 1.1, 5, 0, cv::Size(30, 30));
-
-        if (faces.empty()) {
-            no_face_count++;
-            if (no_face_count >= max_no_face_frames) {
-                std::cout << "No face detected for " << max_no_face_frames << " consecutive frames. Stopping video." << std::endl;
-                break;
+        face_cascade.detectMultiScale(frame, faces, 1.1, 5, 0, cv::Size(30, 30));
+        if (!faces.empty())
+        {
+            int x = faces[0].x;
+            int y = faces[0].y;
+            int w = faces[0].width;
+            int h = faces[0].height;
+            if (fixed_size.width == 0 && fixed_size.height == 0)
+            {
+                fixed_size = cv::Size(w, h);
+                std::cout << "fixed_size: " << fixed_size << std::endl;
+                video_writer.open("./image/encrypt_dot_color_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
+                decrypted_video_writer.open("./image/decrypted_video.mp4", cv::VideoWriter::fourcc('m', 'p', '4', 'v'), fps, fixed_size);
+                if (!video_writer.isOpened() || !decrypted_video_writer.isOpened())
+                {
+                    std::cerr << "Error opening video writer" << std::endl;
+                    return -1;
+                }
             }
-        } else {
-            no_face_count = 0; // Reset the counter if a face is detected
 
-            // Convert face_crop to a byte array
-            std::vector<uint8_t> plaintext(face_crop.total() * face_crop.elemSize());
-            std::memcpy(plaintext.data(), face_crop.data, plaintext.size());
+            // hex to RGB
+            string hex_r = "";
+            string hex_g = "";
+            string hex_b = "";
+            std::string hex_string = "";
 
+            cv::Mat face_crop = frame(cv::Rect(x, y, fixed_size.width, fixed_size.height));
+            for (int row = 0; row < face_crop.rows; ++row)
+            {
+                for (int col = 0; col < face_crop.cols; ++col)
+                {
+                    cv::Vec3b pixel = face_crop.at<cv::Vec3b>(row, col);
+                    string hex_r_pixel = toHex(pixel[2]); // red
+                    string hex_g_pixel = toHex(pixel[1]); // green
+                    string hex_b_pixel = toHex(pixel[0]); // blue
+
+                    hex_r += hex_r_pixel;
+                    hex_g += hex_g_pixel;
+                    hex_b += hex_b_pixel;
+                }
+            }
+
+            for (size_t i = 0; i < hex_r.length(); i += 2)
+            {
+                hex_string += hex_b.substr(i, 2) + hex_g.substr(i, 2) + hex_r.substr(i, 2);
+            }
+
+            std::cout << "Hex string length: " << hex_string.length() << std::endl;
+            std::cout << hex_string << std::endl;
+
+            std::vector<uint8_t> plaintext;
+            hex_to_bytes(hex_string, plaintext);
             size_t plaintext_len = plaintext.size();
             std::vector<uint8_t> ciphertext(plaintext_len + 16);
             std::vector<uint8_t> tag(16);
@@ -284,27 +306,52 @@ int main() {
             // print_hex(output_file, "plaintext", plaintext.data(), plaintext_len);
             // print_hex(output_file, "ciphertext", ciphertext.data(), plaintext_len);
             // print_hex(output_file, "tag", tag.data(), tag.size());
-            // print_hex(output_file, "received", decrypted.data(), plaintext_len);
+            // print_hex(output_file, "decrypted", decrypted.data(), plaintext_len);
 
             cv::Mat color_dot_image(fixed_size.height, fixed_size.width, CV_8UC3);
-            for (int i = 0; i < fixed_size.height; ++i) {
-                for (int j = 0; j < fixed_size.width; ++j) {
+            for (int i = 0; i < fixed_size.height; ++i)
+            {
+                for (int j = 0; j < fixed_size.width; ++j)
+                {
                     int index = (i * fixed_size.width + j) * 3;
-                    if (index + 2 < ciphertext.size()) {
+                    if (index + 2 < ciphertext.size())
+                    {
                         color_dot_image.at<cv::Vec3b>(i, j) = cv::Vec3b(ciphertext[index], ciphertext[index + 1], ciphertext[index + 2]);
-                    } else {
+                    }
+                    else
+                    {
                         color_dot_image.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0); // Padding with black if out of bounds
                     }
                 }
             }
-            dot_video_writer.write(color_dot_image);
+            video_writer.write(color_dot_image);
 
-            // Display the dot video
+            // Reconstruct the original frame from the decrypted data
+            cv::Mat reconstructed_frame(fixed_size.height, fixed_size.width, CV_8UC3);
+            for (int i = 0; i < fixed_size.height; ++i)
+            {
+                for (int j = 0; j < fixed_size.width; ++j)
+                {
+                    int index = (i * fixed_size.width + j) * 3;
+                    if (index + 2 < decrypted.size())
+                    {
+                        reconstructed_frame.at<cv::Vec3b>(i, j) = cv::Vec3b(decrypted[index], decrypted[index + 1], decrypted[index + 2]);
+                    }
+                    else
+                    {
+                        reconstructed_frame.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0); // Padding with black if out of bounds
+                    }
+                }
+            }
+            decrypted_video_writer.write(reconstructed_frame);
+
+            // Display both videos
             cv::imshow("Color Dot Image", color_dot_image);
-
+            cv::imshow("Reconstructed Frame", reconstructed_frame);
             frame_count++;
 
-            if (cv::waitKey(frame_delay) & 0xFF == 'q') {
+            if (cv::waitKey(frame_delay) & 0xFF == 'q')
+            {
                 break;
             }
 
@@ -315,14 +362,13 @@ int main() {
             cudaFree(d_key);
             cudaFree(d_result);
         }
-
         auto frame_end = std::chrono::steady_clock::now();
         std::chrono::duration<double> frame_elapsed = frame_end - frame_start;
         output_file << "Total processing time: " << frame_elapsed.count() << " seconds" << std::endl;
     }
     videoFace_data.release();
-    dot_video_writer.release();
-    face_video_writer.release();
+    video_writer.release();
+    decrypted_video_writer.release();
     cv::destroyAllWindows();
 
     output_file.close();
