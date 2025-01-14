@@ -56,12 +56,12 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds)
 // AEAD functions
 __device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
 {
-    std::memcpy(key->b, k, CRYPTO_KEYBYTES);
+    memcpy(key->b, k, CRYPTO_KEYBYTES);
 }
 
 __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
 {
-    std::memset(s, 0, sizeof(ascon_state_t));
+    memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
     s->x[1] = key->x[0];
     s->x[2] = key->x[1];
@@ -82,7 +82,7 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
         adlen -= ASCON_AEAD_RATE;
     }
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    std::memcpy(lastblock, ad, adlen);
+    memcpy(lastblock, ad, adlen);
     lastblock[adlen] = 0x80;
     s->x[0] ^= ((uint64_t *)lastblock)[0];
     ascon_permutation(s, 6);
@@ -101,10 +101,10 @@ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, ui
         mlen -= ASCON_AEAD_RATE;
     }
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    std::memcpy(lastblock, m, mlen);
+    memcpy(lastblock, m, mlen);
     lastblock[mlen] = 0x80;
     s->x[0] ^= ((uint64_t *)lastblock)[0];
-    std::memcpy(c, &s->x[0], mlen);
+    memcpy(c, &s->x[0], mlen);
 }
 
 __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
@@ -120,7 +120,7 @@ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, ui
         clen -= ASCON_AEAD_RATE;
     }
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    std::memcpy(lastblock, c, clen);
+    memcpy(lastblock, c, clen);
     lastblock[clen] = 0x80;
     uint64_t cblock = ((uint64_t *)lastblock)[0];
     ((uint64_t *)m)[0] = s->x[0] ^ cblock;
@@ -136,6 +136,18 @@ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
     s->x[4] ^= k->x[1];
 }
 
+__device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
+{
+    for (size_t i = 0; i < len; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
 {
     ascon_state_t s;
@@ -145,7 +157,7 @@ __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t 
     ascon_adata(&s, ad, adlen);
     ascon_encrypt(&s, c, m, mlen);
     ascon_final(&s, &key);
-    std::memcpy(t, &s.x[3], 16);
+    memcpy(t, &s.x[3], 16);
 }
 
 __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result)
@@ -157,7 +169,7 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     ascon_adata(&s, ad, adlen);
     ascon_decrypt(&s, m, c, clen - 16);
     ascon_final(&s, &key);
-    *result = std::memcmp(t, &s.x[3], 16) == 0 ? 0 : -1;
+    *result = ascon_compare(t, (uint8_t *)&s.x[3], 16);
 }
 
 // Helper function to convert integer to hex string
