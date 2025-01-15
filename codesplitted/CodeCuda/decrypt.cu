@@ -19,10 +19,10 @@
 using namespace std;
 
 // Helper functions
-__device__ void ascon_permutation(ascon_state_t *s, int rounds);
+__host__ __device__ void ascon_permutation(ascon_state_t *s, int rounds);
 
 // Ascon permutation function
-__device__ void ascon_permutation(ascon_state_t *s, int rounds)
+__host__ __device__ void ascon_permutation(ascon_state_t *s, int rounds)
 {
     static const uint8_t RC[12] = {0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4};
     for (int r = 12 - rounds; r < 12; ++r)
