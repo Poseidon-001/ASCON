@@ -129,6 +129,20 @@ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *key, uint8_t *t
     std::memcpy(tag, &s->x[3], CRYPTO_ABYTES);
 }
 
+__device__ int memcmp_device(const void *s1, const void *s2, size_t n)
+{
+    const uint8_t *p1 = (const uint8_t *)s1;
+    const uint8_t *p2 = (const uint8_t *)s2;
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (p1[i] != p2[i])
+        {
+            return p1[i] - p2[i];
+        }
+    }
+    return 0;
+}
+
 __device__ int ascon_aead_decrypt(uint8_t *m, uint8_t *tag, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
 {
     ascon_state_t s;
@@ -138,7 +152,7 @@ __device__ int ascon_aead_decrypt(uint8_t *m, uint8_t *tag, const uint8_t *c, ui
     ascon_adata(&s, ad, adlen);
     ascon_decrypt(&s, m, c, clen - CRYPTO_ABYTES);
     ascon_final(&s, &key, tag);
-    return std::memcmp(tag, c + clen - CRYPTO_ABYTES, CRYPTO_ABYTES) == 0 ? 0 : -1;
+    return memcmp_device(tag, c + clen - CRYPTO_ABYTES, CRYPTO_ABYTES) == 0 ? 0 : -1;
 }
 
 // CUDA kernel for Ascon decryption
