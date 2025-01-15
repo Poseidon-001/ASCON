@@ -52,12 +52,12 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds)
 }
 
 // AEAD functions
-__device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
+__host__ __device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
 {
     memcpy(key->b, k, CRYPTO_KEYBYTES);
 }
 
-__device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
+__host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
 {
     memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
@@ -70,7 +70,7 @@ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const u
     s->x[4] ^= key->x[1];
 }
 
-__device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
+__host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
 {
     while (adlen >= ASCON_AEAD_RATE)
     {
@@ -87,7 +87,7 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     s->x[4] ^= 1;
 }
 
-__device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
+__host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
 {
     while (clen >= ASCON_AEAD_RATE)
     {
@@ -107,7 +107,7 @@ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, ui
     s->x[0] = cblock;
 }
 
-__device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
+__host__ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
 {
     s->x[1] ^= k->x[0];
     s->x[2] ^= k->x[1];
