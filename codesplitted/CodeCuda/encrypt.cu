@@ -87,6 +87,24 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     s->x[4] ^= 1;
 }
 
+__device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
+{
+    while (mlen >= ASCON_AEAD_RATE)
+    {
+        s->x[0] ^= ((uint64_t *)m)[0];
+        ((uint64_t *)c)[0] = s->x[0];
+        ascon_permutation(s, 6);
+        m += ASCON_AEAD_RATE;
+        c += ASCON_AEAD_RATE;
+        mlen -= ASCON_AEAD_RATE;
+    }
+    uint8_t lastblock[ASCON_AEAD_RATE] = {0};
+    memcpy(lastblock, m, mlen);
+    lastblock[mlen] = 0x80;
+    s->x[0] ^= ((uint64_t *)lastblock)[0];
+    memcpy(c, &s->x[0], mlen);
+}
+
 __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
 {
     while (clen >= ASCON_AEAD_RATE)
@@ -126,6 +144,18 @@ __device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
         }
     }
     return 0;
+}
+
+__global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
+{
+    ascon_state_t s;
+    ascon_key_t key;
+    ascon_loadkey(&key, k);
+    ascon_initaead(&s, &key, npub);
+    ascon_adata(&s, ad, adlen);
+    ascon_encrypt(&s, c, m, mlen);
+    ascon_final(&s, &key);
+    memcpy(t, &s.x[3], 16);
 }
 
 __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result)
@@ -173,19 +203,19 @@ std::string read_hex_from_file(const std::string &filename)
 
 int main()
 {
-    // Example data for decryption
+    // Example data for encryption
     std::vector<uint8_t> key(16);
     std::vector<uint8_t> nonce(16);
     std::vector<uint8_t> ad = {0x09, 0x0A, 0x0B, 0x0C};
+    std::vector<uint8_t> plaintext;
     std::vector<uint8_t> ciphertext;
-    std::vector<uint8_t> decrypted;
     std::vector<uint8_t> tag(16);
 
-    // Read ciphertext from file
-    std::string hex_string = read_hex_from_file("ciphertext.txt");
-    hex_to_bytes(hex_string, ciphertext);
-    size_t ciphertext_len = ciphertext.size();
-    decrypted.resize(ciphertext_len - 16);
+    // Read plaintext from file
+    std::string hex_string = read_hex_from_file("plaintext.txt");
+    hex_to_bytes(hex_string, plaintext);
+    size_t plaintext_len = plaintext.size();
+    ciphertext.resize(plaintext_len + 16);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -195,24 +225,63 @@ int main()
     for (auto &byte : nonce)
         byte = dis(gen);
 
-    uint8_t *d_ciphertext, *d_decrypted, *d_tag, *d_nonce, *d_key;
-    int *d_result;
+    uint8_t *d_plaintext, *d_ciphertext, *d_tag, *d_nonce, *d_key;
+    cudaMalloc(&d_plaintext, plaintext.size());
     cudaMalloc(&d_ciphertext, ciphertext.size());
-    cudaMalloc(&d_decrypted, decrypted.size());
     cudaMalloc(&d_tag, tag.size());
     cudaMalloc(&d_nonce, nonce.size());
     cudaMalloc(&d_key, key.size());
-    cudaMalloc(&d_result, sizeof(int));
 
-    cudaMemcpy(d_ciphertext, ciphertext.data(), ciphertext.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_plaintext, plaintext.data(), plaintext.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
 
     auto start = std::chrono::high_resolution_clock::now();
-    ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag, d_ciphertext, ciphertext_len, ad.data(), ad.size(), d_nonce, d_key, d_result);
+    ascon_aead_encrypt_kernel<<<1, 1>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, ad.data(), ad.size(), d_nonce, d_key);
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Encryption time: " << elapsed.count() << " seconds" << std::endl;
+
+    cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
+    cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
+
+    std::ofstream output_file("ciphertext.txt");
+    for (auto byte : ciphertext)
+    {
+        output_file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+    }
+    output_file << endl;
+
+    cudaFree(d_plaintext);
+    cudaFree(d_ciphertext);
+    cudaFree(d_tag);
+    cudaFree(d_nonce);
+    cudaFree(d_key);
+
+    // Example data for decryption
+    std::vector<uint8_t> decrypted;
+    decrypted.resize(ciphertext.size() - 16);
+
+    uint8_t *d_ciphertext_dec, *d_decrypted, *d_tag_dec, *d_nonce_dec, *d_key_dec;
+    int *d_result;
+    cudaMalloc(&d_ciphertext_dec, ciphertext.size());
+    cudaMalloc(&d_decrypted, decrypted.size());
+    cudaMalloc(&d_tag_dec, tag.size());
+    cudaMalloc(&d_nonce_dec, nonce.size());
+    cudaMalloc(&d_key_dec, key.size());
+    cudaMalloc(&d_result, sizeof(int));
+
+    cudaMemcpy(d_ciphertext_dec, ciphertext.data(), ciphertext.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_tag_dec, tag.data(), tag.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_nonce_dec, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_key_dec, key.data(), key.size(), cudaMemcpyHostToDevice);
+
+    start = std::chrono::high_resolution_clock::now();
+    ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag_dec, d_ciphertext_dec, ciphertext.size(), ad.data(), ad.size(), d_nonce_dec, d_key_dec, d_result);
+    cudaDeviceSynchronize();
+    end = std::chrono::high_resolution_clock::now();
+    elapsed = end - start;
     std::cout << "Decryption time: " << elapsed.count() << " seconds" << std::endl;
 
     cudaMemcpy(decrypted.data(), d_decrypted, decrypted.size(), cudaMemcpyDeviceToHost);
@@ -221,11 +290,11 @@ int main()
 
     std::cout << "Decryption result: " << (result == 0 ? "Success" : "Failure") << std::endl;
 
-    cudaFree(d_ciphertext);
+    cudaFree(d_ciphertext_dec);
     cudaFree(d_decrypted);
-    cudaFree(d_tag);
-    cudaFree(d_nonce);
-    cudaFree(d_key);
+    cudaFree(d_tag_dec);
+    cudaFree(d_nonce_dec);
+    cudaFree(d_key_dec);
     cudaFree(d_result);
 
     return 0;
