@@ -221,6 +221,17 @@ int main()
 
     std::cout << "Decryption result: " << (result == 0 ? "Success" : "Failure") << std::endl;
 
+    if (result == 0)
+    {
+        std::ofstream output_file("decrypted_plaintext.txt");
+        for (auto byte : decrypted)
+        {
+            output_file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+        }
+        output_file << endl;
+        output_file.close();
+    }
+
     cudaFree(d_ciphertext);
     cudaFree(d_decrypted);
     cudaFree(d_tag);
