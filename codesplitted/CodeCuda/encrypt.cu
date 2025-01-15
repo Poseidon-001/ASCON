@@ -114,18 +114,6 @@ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
     s->x[4] ^= k->x[1];
 }
 
-__device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
-{
-    for (size_t i = 0; i < len; ++i)
-    {
-        if (a[i] != b[i])
-        {
-            return -1;
-        }
-    }
-    return 0;
-}
-
 __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
 {
     ascon_state_t s;
