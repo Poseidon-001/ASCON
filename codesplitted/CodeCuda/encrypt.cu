@@ -105,26 +105,6 @@ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, ui
     memcpy(c, &s->x[0], mlen);
 }
 
-__device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
-{
-    while (clen >= ASCON_AEAD_RATE)
-    {
-        uint64_t cblock = ((uint64_t *)c)[0];
-        ((uint64_t *)m)[0] = s->x[0] ^ cblock;
-        s->x[0] = cblock;
-        ascon_permutation(s, 6);
-        c += ASCON_AEAD_RATE;
-        m += ASCON_AEAD_RATE;
-        clen -= ASCON_AEAD_RATE;
-    }
-    uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    memcpy(lastblock, c, clen);
-    lastblock[clen] = 0x80;
-    uint64_t cblock = ((uint64_t *)lastblock)[0];
-    ((uint64_t *)m)[0] = s->x[0] ^ cblock;
-    s->x[0] = cblock;
-}
-
 __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
 {
     s->x[1] ^= k->x[0];
@@ -156,18 +136,6 @@ __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t 
     ascon_encrypt(&s, c, m, mlen);
     ascon_final(&s, &key);
     memcpy(t, &s.x[3], 16);
-}
-
-__global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result)
-{
-    ascon_state_t s;
-    ascon_key_t key;
-    ascon_loadkey(&key, k);
-    ascon_initaead(&s, &key, npub);
-    ascon_adata(&s, ad, adlen);
-    ascon_decrypt(&s, m, c, clen - CRYPTO_ABYTES);
-    ascon_final(&s, &key);
-    *result = ascon_compare(t, (uint8_t *)&s.x[3], CRYPTO_ABYTES);
 }
 
 // Helper function to convert integer to hex string
@@ -258,44 +226,6 @@ int main()
     cudaFree(d_tag);
     cudaFree(d_nonce);
     cudaFree(d_key);
-
-    // Example data for decryption
-    std::vector<uint8_t> decrypted;
-    decrypted.resize(ciphertext.size() - 16);
-
-    uint8_t *d_ciphertext_dec, *d_decrypted, *d_tag_dec, *d_nonce_dec, *d_key_dec;
-    int *d_result;
-    cudaMalloc(&d_ciphertext_dec, ciphertext.size());
-    cudaMalloc(&d_decrypted, decrypted.size());
-    cudaMalloc(&d_tag_dec, tag.size());
-    cudaMalloc(&d_nonce_dec, nonce.size());
-    cudaMalloc(&d_key_dec, key.size());
-    cudaMalloc(&d_result, sizeof(int));
-
-    cudaMemcpy(d_ciphertext_dec, ciphertext.data(), ciphertext.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_tag_dec, tag.data(), tag.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_nonce_dec, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_key_dec, key.data(), key.size(), cudaMemcpyHostToDevice);
-
-    start = std::chrono::high_resolution_clock::now();
-    ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag_dec, d_ciphertext_dec, ciphertext.size(), ad.data(), ad.size(), d_nonce_dec, d_key_dec, d_result);
-    cudaDeviceSynchronize();
-    end = std::chrono::high_resolution_clock::now();
-    elapsed = end - start;
-    std::cout << "Decryption time: " << elapsed.count() << " seconds" << std::endl;
-
-    cudaMemcpy(decrypted.data(), d_decrypted, decrypted.size(), cudaMemcpyDeviceToHost);
-    int result;
-    cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-
-    std::cout << "Decryption result: " << (result == 0 ? "Success" : "Failure") << std::endl;
-
-    cudaFree(d_ciphertext_dec);
-    cudaFree(d_decrypted);
-    cudaFree(d_tag_dec);
-    cudaFree(d_nonce_dec);
-    cudaFree(d_key_dec);
-    cudaFree(d_result);
 
     return 0;
 }
