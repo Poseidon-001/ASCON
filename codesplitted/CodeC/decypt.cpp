@@ -90,24 +90,6 @@ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     s->x[4] ^= 1;
 }
 
-void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
-{
-    while (mlen >= ASCON_AEAD_RATE)
-    {
-        s->x[0] ^= ((uint64_t *)m)[0];
-        ((uint64_t *)c)[0] = s->x[0];
-        ascon_permutation(s, 6);
-        m += ASCON_AEAD_RATE;
-        c += ASCON_AEAD_RATE;
-        mlen -= ASCON_AEAD_RATE;
-    }
-    uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    std::memcpy(lastblock, m, mlen);
-    lastblock[mlen] = 0x80;
-    s->x[0] ^= ((uint64_t *)lastblock)[0];
-    std::memcpy(c, &s->x[0], mlen);
-}
-
 void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
 {
     while (clen >= ASCON_AEAD_RATE)
@@ -136,18 +118,6 @@ void ascon_final(ascon_state_t *s, const ascon_key_t *key, uint8_t *tag)
     s->x[3] ^= key->x[0];
     s->x[4] ^= key->x[1];
     std::memcpy(tag, &s->x[3], CRYPTO_ABYTES);
-}
-
-int ascon_aead_encrypt(uint8_t *c, uint8_t *tag, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
-{
-    ascon_state_t s;
-    ascon_key_t key;
-    ascon_loadkey(&key, k);
-    ascon_initaead(&s, &key, npub);
-    ascon_adata(&s, ad, adlen);
-    ascon_encrypt(&s, c, m, mlen);
-    ascon_final(&s, &key, tag);
-    return 0;
 }
 
 int ascon_aead_decrypt(uint8_t *m, uint8_t *tag, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
