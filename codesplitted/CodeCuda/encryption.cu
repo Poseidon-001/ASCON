@@ -7,7 +7,6 @@
 #include <random>
 #include <fstream>
 #include <chrono>
-#include <cuda_runtime.h>
 
 using namespace std;
 
@@ -35,7 +34,7 @@ std::string read_hex_from_file(const std::string &filename)
 }
 
 // Ascon functions
-__device__ void ascon_permutation(ascon_state_t *s, int rounds)
+void ascon_permutation(ascon_state_t *s, int rounds)
 {
     static const uint8_t RC[12] = {0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4};
     for (int r = 12 - rounds; r < 12; ++r)
@@ -64,12 +63,12 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds)
     }
 }
 
-__device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
+void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
 {
     std::memcpy(key->b, k, CRYPTO_KEYBYTES);
 }
 
-__device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
+void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
 {
     std::memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
@@ -82,7 +81,7 @@ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const u
     s->x[4] ^= key->x[1];
 }
 
-__device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
+void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
 {
     while (adlen >= ASCON_AEAD_RATE)
     {
@@ -99,7 +98,7 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     s->x[4] ^= 1;
 }
 
-__device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
+void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
 {
     while (mlen >= ASCON_AEAD_RATE)
     {
@@ -117,7 +116,7 @@ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, ui
     std::memcpy(c, &s->x[0], mlen);
 }
 
-__device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
+void ascon_final(ascon_state_t *s, const ascon_key_t *k)
 {
     s->x[1] ^= k->x[0];
     s->x[2] ^= k->x[1];
@@ -126,7 +125,7 @@ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
     s->x[4] ^= k->x[1];
 }
 
-__device__ void ascon_aead_encrypt(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
+int ascon_aead_encrypt(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
 {
     ascon_state_t s;
     ascon_key_t key;
@@ -136,19 +135,7 @@ __device__ void ascon_aead_encrypt(uint8_t *t, uint8_t *c, const uint8_t *m, uin
     ascon_encrypt(&s, c, m, mlen);
     ascon_final(&s, &key);
     std::memcpy(t, &s.x[3], 16);
-}
-
-// CUDA kernel for Ascon encryption
-__global__ void ascon_encrypt_kernel(uint8_t *d_ciphertext, const uint8_t *d_plaintext, size_t plaintext_len, const uint8_t *d_nonce, const uint8_t *d_key)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < plaintext_len)
-    {
-        uint8_t *c = d_ciphertext + idx * (plaintext_len + 16);
-        const uint8_t *m = d_plaintext + idx * plaintext_len;
-        uint8_t t[16];
-        ascon_aead_encrypt(t, c, m, plaintext_len, nullptr, 0, d_nonce, d_key);
-    }
+    return 0;
 }
 
 int main()
@@ -174,60 +161,25 @@ int main()
     }
 
     std::string line;
-    std::vector<std::string> lines;
     while (std::getline(input_file, line))
     {
-        lines.push_back(line);
-    }
+        std::vector<uint8_t> plaintext;
+        hex_to_bytes(line, plaintext);
+        size_t plaintext_len = plaintext.size();
+        std::vector<uint8_t> ciphertext(plaintext_len + 16);
+        std::vector<uint8_t> tag(16);
 
-    size_t num_lines = lines.size();
-    size_t plaintext_len = lines[0].length() / 2;
-    size_t ciphertext_len = plaintext_len + 16;
+        ascon_aead_encrypt(tag.data(), ciphertext.data(), plaintext.data(), plaintext_len, nullptr, 0, nonce.data(), key.data());
 
-    uint8_t *h_plaintext = new uint8_t[num_lines * plaintext_len];
-    uint8_t *h_ciphertext = new uint8_t[num_lines * ciphertext_len];
-
-    for (size_t i = 0; i < num_lines; ++i)
-    {
-        std::vector<uint8_t> temp_plaintext;
-        hex_to_bytes(lines[i], temp_plaintext);
-        std::memcpy(h_plaintext + i * plaintext_len, temp_plaintext.data(), plaintext_len);
-    }
-
-    uint8_t *d_plaintext, *d_ciphertext, *d_nonce, *d_key;
-    cudaMalloc(&d_plaintext, num_lines * plaintext_len * sizeof(uint8_t));
-    cudaMalloc(&d_ciphertext, num_lines * ciphertext_len * sizeof(uint8_t));
-    cudaMalloc(&d_nonce, 16 * sizeof(uint8_t));
-    cudaMalloc(&d_key, 16 * sizeof(uint8_t));
-
-    cudaMemcpy(d_plaintext, h_plaintext, num_lines * plaintext_len * sizeof(uint8_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_nonce, nonce.data(), 16 * sizeof(uint8_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_key, key.data(), 16 * sizeof(uint8_t), cudaMemcpyHostToDevice);
-
-    int blockSize = 256;
-    int numBlocks = (num_lines + blockSize - 1) / blockSize;
-    ascon_encrypt_kernel<<<numBlocks, blockSize>>>(d_ciphertext, d_plaintext, plaintext_len, d_nonce, d_key);
-
-    cudaMemcpy(h_ciphertext, d_ciphertext, num_lines * ciphertext_len * sizeof(uint8_t), cudaMemcpyDeviceToHost);
-
-    for (size_t i = 0; i < num_lines; ++i)
-    {
-        for (size_t j = 0; j < ciphertext_len; ++j)
+        for (auto byte : ciphertext)
         {
-            output_file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(h_ciphertext[i * ciphertext_len + j]);
+            output_file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
         }
         output_file << endl;
     }
 
     input_file.close();
     output_file.close();
-
-    delete[] h_plaintext;
-    delete[] h_ciphertext;
-    cudaFree(d_plaintext);
-    cudaFree(d_ciphertext);
-    cudaFree(d_nonce);
-    cudaFree(d_key);
 
     auto end = std::chrono::high_resolution_clock::now();  // Kết thúc đo thời gian
     std::chrono::duration<double> elapsed_time = end - start;
