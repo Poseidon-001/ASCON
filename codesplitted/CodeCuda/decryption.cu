@@ -24,16 +24,6 @@ void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
     }
 }
 
-std::string bytes_to_hex(const std::vector<uint8_t> &bytes)
-{
-    std::stringstream ss;
-    for (size_t i = 0; i < bytes.size(); ++i)
-    {
-        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bytes[i]);
-    }
-    return ss.str();
-}
-
 // Ascon functions
 __device__ void ascon_permutation(ascon_state_t *s, int rounds)
 {
@@ -156,10 +146,10 @@ __device__ int ascon_aead_decrypt(uint8_t *m, uint8_t *tag, const uint8_t *c, ui
 }
 
 // CUDA kernel for Ascon decryption
-__global__ void ascon_decrypt_kernel(uint8_t *d_plaintext, const uint8_t *d_ciphertext, size_t ciphertext_len, const uint8_t *d_nonce, const uint8_t *d_key)
+__global__ void ascon_decrypt_kernel(uint8_t *d_plaintext, const uint8_t *d_ciphertext, size_t num_lines, size_t ciphertext_len, const uint8_t *d_nonce, const uint8_t *d_key)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < ciphertext_len)
+    if (idx < num_lines)
     {
         uint8_t *m = d_plaintext + idx * (ciphertext_len - 16);
         const uint8_t *c = d_ciphertext + idx * ciphertext_len;
@@ -181,7 +171,7 @@ int main()
         byte = dis(gen);
 
     std::ifstream input_file("ciphertext.txt");
-    std::ofstream output_file("plaintext.txt");
+    std::ofstream output_file("plaintext.txt", std::ios::binary);
     if (!input_file.is_open() || !output_file.is_open())
     {
         std::cerr << "Unable to open file" << std::endl;
@@ -221,15 +211,13 @@ int main()
 
     int blockSize = 256;
     int numBlocks = (num_lines + blockSize - 1) / blockSize;
-    ascon_decrypt_kernel<<<numBlocks, blockSize>>>(d_plaintext, d_ciphertext, ciphertext_len, d_nonce, d_key);
+    ascon_decrypt_kernel<<<numBlocks, blockSize>>>(d_plaintext, d_ciphertext, num_lines, ciphertext_len, d_nonce, d_key);
 
     cudaMemcpy(h_plaintext, d_plaintext, num_lines * plaintext_len * sizeof(uint8_t), cudaMemcpyDeviceToHost);
 
     for (size_t i = 0; i < num_lines; ++i)
     {
-        std::vector<uint8_t> temp_plaintext(h_plaintext + i * plaintext_len, h_plaintext + (i + 1) * plaintext_len);
-        std::string decrypted_hex = bytes_to_hex(temp_plaintext);
-        output_file << decrypted_hex << endl;
+        output_file.write(reinterpret_cast<char*>(h_plaintext + i * plaintext_len), plaintext_len);
     }
 
     input_file.close();
