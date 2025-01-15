@@ -7,6 +7,7 @@
 #include <random>
 #include <fstream>
 #include <cuda_runtime.h>
+#include <chrono>
 
 // Define RATE based on the variant
 #ifdef ASCON_AEAD_RATE
@@ -86,22 +87,24 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     s->x[4] ^= 1;
 }
 
-__device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
+__device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
 {
-    while (mlen >= ASCON_AEAD_RATE)
+    while (clen >= ASCON_AEAD_RATE)
     {
-        s->x[0] ^= ((uint64_t *)m)[0];
-        ((uint64_t *)c)[0] = s->x[0];
+        uint64_t cblock = ((uint64_t *)c)[0];
+        ((uint64_t *)m)[0] = s->x[0] ^ cblock;
+        s->x[0] = cblock;
         ascon_permutation(s, 6);
-        m += ASCON_AEAD_RATE;
         c += ASCON_AEAD_RATE;
-        mlen -= ASCON_AEAD_RATE;
+        m += ASCON_AEAD_RATE;
+        clen -= ASCON_AEAD_RATE;
     }
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
-    memcpy(lastblock, m, mlen);
-    lastblock[mlen] = 0x80;
-    s->x[0] ^= ((uint64_t *)lastblock)[0];
-    memcpy(c, &s->x[0], mlen);
+    memcpy(lastblock, c, clen);
+    lastblock[clen] = 0x80;
+    uint64_t cblock = ((uint64_t *)lastblock)[0];
+    ((uint64_t *)m)[0] = s->x[0] ^ cblock;
+    s->x[0] = cblock;
 }
 
 __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
@@ -113,16 +116,28 @@ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
     s->x[4] ^= k->x[1];
 }
 
-__global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k)
+__device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
+{
+    for (size_t i = 0; i < len; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+__global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result)
 {
     ascon_state_t s;
     ascon_key_t key;
     ascon_loadkey(&key, k);
     ascon_initaead(&s, &key, npub);
     ascon_adata(&s, ad, adlen);
-    ascon_encrypt(&s, c, m, mlen);
+    ascon_decrypt(&s, m, c, clen - CRYPTO_ABYTES);
     ascon_final(&s, &key);
-    memcpy(t, &s.x[3], 16);
+    *result = ascon_compare(t, (uint8_t *)&s.x[3], CRYPTO_ABYTES);
 }
 
 // Helper function to convert integer to hex string
@@ -158,19 +173,19 @@ std::string read_hex_from_file(const std::string &filename)
 
 int main()
 {
-    // Example data for encryption
+    // Example data for decryption
     std::vector<uint8_t> key(16);
     std::vector<uint8_t> nonce(16);
     std::vector<uint8_t> ad = {0x09, 0x0A, 0x0B, 0x0C};
-    std::vector<uint8_t> plaintext;
     std::vector<uint8_t> ciphertext;
+    std::vector<uint8_t> decrypted;
     std::vector<uint8_t> tag(16);
 
-    // Read plaintext from file
-    std::string hex_string = read_hex_from_file("plaintext.txt");
-    hex_to_bytes(hex_string, plaintext);
-    size_t plaintext_len = plaintext.size();
-    ciphertext.resize(plaintext_len + 16);
+    // Read ciphertext from file
+    std::string hex_string = read_hex_from_file("ciphertext.txt");
+    hex_to_bytes(hex_string, ciphertext);
+    size_t ciphertext_len = ciphertext.size();
+    decrypted.resize(ciphertext_len - 16);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -180,33 +195,38 @@ int main()
     for (auto &byte : nonce)
         byte = dis(gen);
 
-    uint8_t *d_plaintext, *d_ciphertext, *d_tag, *d_nonce, *d_key;
-    cudaMalloc(&d_plaintext, plaintext.size());
+    uint8_t *d_ciphertext, *d_decrypted, *d_tag, *d_nonce, *d_key;
+    int *d_result;
     cudaMalloc(&d_ciphertext, ciphertext.size());
+    cudaMalloc(&d_decrypted, decrypted.size());
     cudaMalloc(&d_tag, tag.size());
     cudaMalloc(&d_nonce, nonce.size());
     cudaMalloc(&d_key, key.size());
+    cudaMalloc(&d_result, sizeof(int));
 
-    cudaMemcpy(d_plaintext, plaintext.data(), plaintext.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_ciphertext, ciphertext.data(), ciphertext.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
 
-    ascon_aead_encrypt_kernel<<<1, 1>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, ad.data(), ad.size(), d_nonce, d_key);
-    cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
-    cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
+    auto start = std::chrono::high_resolution_clock::now();
+    ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag, d_ciphertext, ciphertext_len, ad.data(), ad.size(), d_nonce, d_key, d_result);
+    cudaDeviceSynchronize();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Decryption time: " << elapsed.count() << " seconds" << std::endl;
 
-    std::ofstream output_file("ciphertext.txt");
-    for (auto byte : ciphertext)
-    {
-        output_file << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
-    }
-    output_file << endl;
+    cudaMemcpy(decrypted.data(), d_decrypted, decrypted.size(), cudaMemcpyDeviceToHost);
+    int result;
+    cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
 
-    cudaFree(d_plaintext);
+    std::cout << "Decryption result: " << (result == 0 ? "Success" : "Failure") << std::endl;
+
     cudaFree(d_ciphertext);
+    cudaFree(d_decrypted);
     cudaFree(d_tag);
     cudaFree(d_nonce);
     cudaFree(d_key);
+    cudaFree(d_result);
 
     return 0;
 }
