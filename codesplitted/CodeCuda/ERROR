@@ -1,29 +1,9 @@
-encryption.cu(91): error: initial value of reference to non-const must be an lvalue
-          hex_to_bytes(lines[i], std::vector<uint8_t>(h_plaintext + i * plaintext_len, h_plaintext + (i + 1) * plaintext_len));
-                                 ^
+decrypt.cu(205): error: "start" has already been declared in the current scope
+      auto start = std::chrono::high_resolution_clock::now();
+           ^
 
-1 error detected in the compilation of "encryption.cu".
+decrypt.cu(236): error: "end" has already been declared in the current scope
+      auto end = std::chrono::high_resolution_clock::now();
+           ^
 
-
-phapdn@phapdn-Jetson-AGX-Xavier:~/ASCONcpp/CUDA_testing$ nvcc encryption.cu -o encryption
-encryption.cu(45): error: calling a __host__ function("ascon_loadkey(    ::ascon_key_t *, const unsigned char *)") from a __global__ function("ascon_encrypt_kernel") is not allowed
-
-encryption.cu(45): error: identifier "ascon_loadkey" is undefined in device code
-
-encryption.cu(46): error: calling a __host__ function("ascon_initaead(    ::ascon_state_t *, const     ::ascon_key_t *, const unsigned char *)") from a __global__ function("ascon_encrypt_kernel") is not allowed
-
-encryption.cu(46): error: identifier "ascon_initaead" is undefined in device code
-
-encryption.cu(47): error: calling a __host__ function("ascon_adata(    ::ascon_state_t *, const unsigned char *, unsigned long)") from a __global__ function("ascon_encrypt_kernel") is not allowed
-
-encryption.cu(47): error: identifier "ascon_adata" is undefined in device code
-
-encryption.cu(48): error: calling a __host__ function("ascon_encrypt(    ::ascon_state_t *, unsigned char *, const unsigned char *, unsigned long)") from a __global__ function("ascon_encrypt_kernel") is not allowed
-
-encryption.cu(48): error: identifier "ascon_encrypt" is undefined in device code
-
-encryption.cu(49): error: calling a __host__ function("ascon_final(    ::ascon_state_t *, const     ::ascon_key_t *)") from a __global__ function("ascon_encrypt_kernel") is not allowed
-
-encryption.cu(49): error: identifier "ascon_final" is undefined in device code
-
-10 errors detected in the compilation of "encryption.cu".
+2 errors detected in the compilation of "decrypt.cu".
