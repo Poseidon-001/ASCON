@@ -202,7 +202,6 @@ int main()
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
 
-    auto start = std::chrono::high_resolution_clock::now();
     ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag, d_ciphertext, ciphertext_len, ad.data(), ad.size(), d_nonce, d_key, d_result);
     cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
@@ -233,7 +232,6 @@ int main()
     cudaFree(d_key);
     cudaFree(d_result);
 
-    auto end = std::chrono::high_resolution_clock::now();  // Kết thúc đo thời gian
     std::chrono::duration<double> elapsed_time = end - start;
     std::cout << "Elapsed time: " << elapsed_time.count() << " seconds" << std::endl;  // Hiển thị thời gian chạy
 
