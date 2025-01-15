@@ -140,14 +140,6 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     *result = ascon_compare(t, (uint8_t *)&s.x[3], CRYPTO_ABYTES);
 }
 
-// Helper function to convert integer to hex string
-string toHex(int val)
-{
-    stringstream ss;
-    ss << setfill('0') << setw(2) << hex << val;
-    return ss.str();
-}
-
 // Helper function to convert hex string to byte array
 void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
 {
@@ -173,6 +165,8 @@ std::string read_hex_from_file(const std::string &filename)
 
 int main()
 {
+    auto start = std::chrono::high_resolution_clock::now();  // Bắt đầu đo thời gian
+
     // Example data for decryption
     std::vector<uint8_t> key(16);
     std::vector<uint8_t> nonce(16);
@@ -238,6 +232,10 @@ int main()
     cudaFree(d_nonce);
     cudaFree(d_key);
     cudaFree(d_result);
+
+    auto end = std::chrono::high_resolution_clock::now();  // Kết thúc đo thời gian
+    std::chrono::duration<double> elapsed_time = end - start;
+    std::cout << "Elapsed time: " << elapsed_time.count() << " seconds" << std::endl;  // Hiển thị thời gian chạy
 
     return 0;
 }
