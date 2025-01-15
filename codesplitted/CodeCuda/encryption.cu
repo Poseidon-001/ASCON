@@ -88,7 +88,9 @@ int main()
 
     for (size_t i = 0; i < num_lines; ++i)
     {
-        hex_to_bytes(lines[i], std::vector<uint8_t>(h_plaintext + i * plaintext_len, h_plaintext + (i + 1) * plaintext_len));
+        std::vector<uint8_t> temp_plaintext;
+        hex_to_bytes(lines[i], temp_plaintext);
+        std::memcpy(h_plaintext + i * plaintext_len, temp_plaintext.data(), plaintext_len);
     }
 
     uint8_t *d_plaintext, *d_ciphertext, *d_nonce, *d_key;
