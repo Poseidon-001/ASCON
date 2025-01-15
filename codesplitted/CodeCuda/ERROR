@@ -1,21 +1,21 @@
-decrypt.cu(55): warning #20039-D: a __host__ function("ascon_loadkey") redeclared with __device__, hence treated as a __host__ __device__ function
-  __attribute__((device)) void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
-                               ^
+decrypt.cu(68): error: calling a __device__ function("ascon_permutation(    ::ascon_state_t *, int)") from a __host__ __device__ function("ascon_initaead") is not allowed
+      ascon_permutation(s, 12);
+      ^
 
-Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+decrypt.cu(78): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_adata") is not allowed
+          ascon_permutation(s, 6);
+          ^
 
-decrypt.cu(60): warning #20039-D: a __host__ function("ascon_initaead") redeclared with __device__, hence treated as a __host__ __device__ function
-  __attribute__((device)) void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
-                               ^
+decrypt.cu(86): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_adata") is not allowed
+      ascon_permutation(s, 6);
+      ^
 
-decrypt.cu(73): warning #20039-D: a __host__ function("ascon_adata") redeclared with __device__, hence treated as a __host__ __device__ function
-  __attribute__((device)) void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
-                               ^
+decrypt.cu(97): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_decrypt") is not allowed
+          ascon_permutation(s, 6);
+          ^
 
-decrypt.cu(90): warning #20039-D: a __host__ function("ascon_decrypt") redeclared with __device__, hence treated as a __host__ __device__ function
-  __attribute__((device)) void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
-                               ^
+decrypt.cu(114): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_final") is not allowed
+      ascon_permutation(s, 12);
+      ^
 
-decrypt.cu(110): warning #20039-D: a __host__ function("ascon_final") redeclared with __device__, hence treated as a __host__ __device__ function
-  __attribute__((device)) void ascon_final(ascon_state_t *s, const ascon_key_t *k)
-                               ^
+5 errors detected in the compilation of "decrypt.cu".
