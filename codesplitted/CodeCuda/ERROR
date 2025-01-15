@@ -7,3 +7,29 @@ decrypt.cu(236): error: "end" has already been declared in the current scope
            ^
 
 2 errors detected in the compilation of "decrypt.cu".
+
+
+decryption.cu(67): warning #20039-D: a __host__ function("ascon_loadkey") redeclared with __device__, hence treated as a __host__ __device__ function
+  __attribute__((device)) void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
+                               ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+decryption.cu(72): warning #20039-D: a __host__ function("ascon_initaead") redeclared with __device__, hence treated as a __host__ __device__ function
+  __attribute__((device)) void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
+                               ^
+
+decryption.cu(85): warning #20039-D: a __host__ function("ascon_adata") redeclared with __device__, hence treated as a __host__ __device__ function
+  __attribute__((device)) void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
+                               ^
+
+decryption.cu(102): warning #20039-D: a __host__ function("ascon_decrypt") redeclared with __device__, hence treated as a __host__ __device__ function
+  __attribute__((device)) void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
+                               ^
+
+decryption.cu(141): error: calling a __host__ function("memcmp") from a __device__ function("ascon_aead_decrypt") is not allowed
+
+decryption.cu(141): error: identifier "memcmp" is undefined in device code
+
+2 errors detected in the compilation of "decryption.cu".
+
