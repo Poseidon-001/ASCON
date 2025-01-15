@@ -7,6 +7,7 @@
 #include <random>
 #include <fstream>
 #include <cuda_runtime.h>
+#include <chrono>
 
 // Define RATE based on the variant
 #ifdef ASCON_AEAD_RATE
@@ -207,7 +208,13 @@ int main()
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
 
+    auto start = std::chrono::high_resolution_clock::now();
     ascon_aead_decrypt_kernel<<<1, 1>>>(d_decrypted, d_tag, d_ciphertext, ciphertext_len, ad.data(), ad.size(), d_nonce, d_key, d_result);
+    cudaDeviceSynchronize();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Decryption time: " << elapsed.count() << " seconds" << std::endl;
+
     cudaMemcpy(decrypted.data(), d_decrypted, decrypted.size(), cudaMemcpyDeviceToHost);
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
