@@ -168,7 +168,7 @@ int main()
     std::vector<uint8_t> tag(16);
 
     // Read plaintext from file
-    std::string hex_string = read_hex_from_file("plaintext.txt");
+    std::string hex_string = read_hex_from_file("output_hex.txt");
     hex_to_bytes(hex_string, plaintext);
     size_t plaintext_len = plaintext.size();
     ciphertext.resize(plaintext_len + 16);
