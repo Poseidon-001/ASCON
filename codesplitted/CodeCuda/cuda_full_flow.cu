@@ -255,10 +255,12 @@ std::string read_hex_from_file(const std::string &filename)
 
 int main()
 {
-    cv::VideoCapture videoFace_data(0); // Use 0 for the default webcam
+    // Change to read from a video file
+    std::string video_path = "path_to_your_video_file.mp4";
+    cv::VideoCapture videoFace_data(video_path);
 
     if (!videoFace_data.isOpened()) {
-        std::cerr << "Unable to open webcam" << std::endl;
+        std::cerr << "Unable to open video file" << std::endl;
         return -1;
     }
 
