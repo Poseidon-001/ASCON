@@ -1,4 +1,3 @@
-
 #include "ascon.h"
 #include <cstring>
 #include <iostream>
