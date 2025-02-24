@@ -347,12 +347,14 @@ int main()
     printf("\n");
 
     // Increase the number of blocks and threads
-    int num_blocks = 16;
-    int num_threads = 256;
+    int threadsPerBlock = 256;
+    int numBlocks = (plaintext_len + threadsPerBlock - 1) / threadsPerBlock;
+
+    printf("Kernel launch config: numBlocks=%d, threadsPerBlock=%d\n", numBlocks, threadsPerBlock);
 
     // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_encrypt_kernel<<<num_blocks, num_threads>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
+    ascon_aead_encrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
@@ -367,7 +369,7 @@ int main()
 
     // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_decrypt_kernel<<<num_blocks, num_threads>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
+    ascon_aead_decrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
