@@ -79,12 +79,12 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds) {
 }
 
 // AEAD functions
-__host__ __device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
+__device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
 {
     memcpy(key->b, k, CRYPTO_KEYBYTES);
 }
 
-__host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
+__device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
 {
     memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
@@ -97,7 +97,7 @@ __host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key
     s->x[4] ^= key->x[1];
 }
 
-__host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
+__device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
 {
     while (adlen >= ASCON_AEAD_RATE)
     {
@@ -114,7 +114,7 @@ __host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64
     s->x[4] ^= 1;
 }
 
-__host__ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
+__device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
 {
     while (mlen >= ASCON_AEAD_RATE)
     {
@@ -132,7 +132,7 @@ __host__ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8
     memcpy(c, &s->x[0], mlen);
 }
 
-__host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
+__device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
 {
     while (clen >= ASCON_AEAD_RATE)
     {
@@ -152,7 +152,7 @@ __host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8
     s->x[0] = cblock;
 }
 
-__host__ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
+__device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
 {
     s->x[1] ^= k->x[0];
     s->x[2] ^= k->x[1];
@@ -230,13 +230,6 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     int start = idx * chunk_size;
     int end = (idx == gridDim.x * blockDim.x - 1) ? clen : start + chunk_size;
 
-    // khoi tao va luu
-    int h_result;
-    int *d_result;
-    cudaMalloc((void**)&d_result, sizeof(int));
-    ascon_aead_decrypt_kernel<<<numBlocks, threadsPerBlock>>>(m, n, c, clen, ad, adlen, npub, k, d_result);
-    cudaMemcpy(&h_result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
-    
     __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
@@ -280,21 +273,9 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     if (idx == 0) {
         *result = ascon_compare(t, (uint8_t *)&shared_s.x[3], 16);
     }
-    std::cout << "Result: " << h_result << std::endl;  
-
-// save into file. new modify
-    std::ofstream outFile("result.txt");  
-    if (outFile.is_open()) {  
-        outFile << h_result;  
-        outFile.close();  
-    } else {  
-        std::cerr << "Unable to open file" << std::endl;  
-    }  
-
-    cudaFree(d_result);
 }
 
-    // Helper function to convert hex string to byte array
+// Helper function to convert hex string to byte array
 void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
 {
     bytes.resize(hex.length() / 2);
@@ -315,6 +296,17 @@ std::string read_hex_from_file(const std::string &filename)
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
+}
+
+// Function to write byte array to hex string file
+void write_bytes_to_hex_file(const std::string &filename, const std::vector<uint8_t> &bytes)
+{
+    std::ofstream file(filename);
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
+        file << std::hex << std::setw(2) << std::setfill('0') << (int)bytes[i];
+    }
+    file.close();
 }
 
 int main()
@@ -398,6 +390,10 @@ int main()
     std::cout << std::endl;
 
     std::cout << "Verification result: " << (result == 0 ? "Success" : "Failure") << std::endl;
+
+    // Write results to files
+    write_bytes_to_hex_file("encrypt.txt", ciphertext);
+    write_bytes_to_hex_file("plaintext.txt", decrypted);
 
     cudaFree(d_plaintext);
     cudaFree(d_ciphertext);
