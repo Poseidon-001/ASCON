@@ -353,6 +353,10 @@ int main()
     // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
     ascon_aead_encrypt_kernel<<<num_blocks, num_threads>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
+    }
     cudaDeviceSynchronize();
     auto end_encrypt = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_encrypt = end_encrypt - start_encrypt;
@@ -364,6 +368,10 @@ int main()
     // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
     ascon_aead_decrypt_kernel<<<num_blocks, num_threads>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
+    }
     cudaDeviceSynchronize();
     auto end_decrypt = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_decrypt = end_decrypt - start_decrypt;
