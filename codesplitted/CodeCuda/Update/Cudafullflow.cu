@@ -24,14 +24,17 @@ __device__ uint64_t warp_shuffle(uint64_t val, int src_lane) {
 }
 
 __constant__ uint8_t RC[12] = {0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4};
+__constant__ uint64_t SBOX[5] = {0x80400c0600000000ULL, 0x1ULL, 0x2ULL, 0x3ULL, 0x4ULL}; // Example S-box values
 
 __device__ void ascon_permutation(ascon_state_t *s, int rounds) {
-    uint64_t x0 = s->x[0];
-    uint64_t x1 = s->x[1];
-    uint64_t x2 = s->x[2];
-    uint64_t x3 = s->x[3];
-    uint64_t x4 = s->x[4];
+    // Use registers for x0, x1, x2, x3, x4
+    register uint64_t x0 = s->x[0];
+    register uint64_t x1 = s->x[1];
+    register uint64_t x2 = s->x[2];
+    register uint64_t x3 = s->x[3];
+    register uint64_t x4 = s->x[4];
 
+    #pragma unroll
     for (int r = 12 - rounds; r < 12; ++r) {
         x2 ^= RC[r];
         x0 ^= x4;
@@ -61,6 +64,13 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds) {
         x4 = (x4 >> 7) ^ (x4 << (64 - 7)) ^ (x4 >> 41) ^ (x4 << (64 - 41));
     }
 
+    // Use __shfl_xor_sync for data transfer
+    x0 = __shfl_xor_sync(0xFFFFFFFF, x0, 1);
+    x1 = __shfl_xor_sync(0xFFFFFFFF, x1, 1);
+    x2 = __shfl_xor_sync(0xFFFFFFFF, x2, 1);
+    x3 = __shfl_xor_sync(0xFFFFFFFF, x3, 1);
+    x4 = __shfl_xor_sync(0xFFFFFFFF, x4, 1);
+
     s->x[0] = x0;
     s->x[1] = x1;
     s->x[2] = x2;
@@ -69,11 +79,13 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds) {
 }
 
 // AEAD functions
-__host__ __device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k) {
+__host__ __device__ void ascon_loadkey(ascon_key_t *key, const uint8_t *k)
+{
     memcpy(key->b, k, CRYPTO_KEYBYTES);
 }
 
-__host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub) {
+__host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const uint8_t *npub)
+{
     memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
     s->x[1] = key->x[0];
@@ -85,8 +97,10 @@ __host__ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key
     s->x[4] ^= key->x[1];
 }
 
-__host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen) {
-    while (adlen >= ASCON_AEAD_RATE) {
+__host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
+{
+    while (adlen >= ASCON_AEAD_RATE)
+    {
         s->x[0] ^= ((uint64_t *)ad)[0];
         ascon_permutation(s, 6);
         ad += ASCON_AEAD_RATE;
@@ -100,8 +114,10 @@ __host__ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64
     s->x[4] ^= 1;
 }
 
-__host__ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen) {
-    while (mlen >= ASCON_AEAD_RATE) {
+__host__ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, uint64_t mlen)
+{
+    while (mlen >= ASCON_AEAD_RATE)
+    {
         s->x[0] ^= ((uint64_t *)m)[0];
         ((uint64_t *)c)[0] = s->x[0];
         ascon_permutation(s, 6);
@@ -116,8 +132,10 @@ __host__ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8
     memcpy(c, &s->x[0], mlen);
 }
 
-__host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen) {
-    while (clen >= ASCON_AEAD_RATE) {
+__host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, uint64_t clen)
+{
+    while (clen >= ASCON_AEAD_RATE)
+    {
         uint64_t cblock = ((uint64_t *)c)[0];
         ((uint64_t *)m)[0] = s->x[0] ^ cblock;
         s->x[0] = cblock;
@@ -134,7 +152,8 @@ __host__ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8
     s->x[0] = cblock;
 }
 
-__host__ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k) {
+__host__ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k)
+{
     s->x[1] ^= k->x[0];
     s->x[2] ^= k->x[1];
     ascon_permutation(s, 12);
@@ -142,9 +161,12 @@ __host__ __device__ void ascon_final(ascon_state_t *s, const ascon_key_t *k) {
     s->x[4] ^= k->x[1];
 }
 
-__device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        if (a[i] != b[i]) {
+__device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
+{
+    for (size_t i = 0; i < len; ++i)
+    {
+        if (a[i] != b[i])
+        {
             return -1;
         }
     }
@@ -152,27 +174,36 @@ __device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len) {
 }
 
 __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
+    // Increase the number of blocks and threads
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int chunk_size = mlen / (gridDim.x * blockDim.x);
     int start = idx * chunk_size;
     int end = (idx == gridDim.x * blockDim.x - 1) ? mlen : start + chunk_size;
 
+    __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
     ascon_loadkey(&key, k);
     ascon_initaead(&s, &key, npub);
     ascon_adata(&s, ad, adlen);
 
-    uint64_t x0 = s.x[0];
-    uint64_t x1 = s.x[1];
-    uint64_t x2 = s.x[2];
-    uint64_t x3 = s.x[3];
-    uint64_t x4 = s.x[4];
+    // Copy state to shared memory
+    if (threadIdx.x == 0) {
+        shared_s = s;
+    }
+    __syncthreads();
+
+    // Use registers for x0, x1, x2, x3, x4
+    register uint64_t x0 = shared_s.x[0];
+    register uint64_t x1 = shared_s.x[1];
+    register uint64_t x2 = shared_s.x[2];
+    register uint64_t x3 = shared_s.x[3];
+    register uint64_t x4 = shared_s.x[4];
 
     for (int i = start; i < end; i += ASCON_AEAD_RATE) {
         x0 ^= ((uint64_t *)(m + i))[0];
         ((uint64_t *)(c + i))[0] = x0;
-        ascon_permutation(&s, 6);
+        ascon_permutation(&shared_s, 6);
     }
 
     if (idx == gridDim.x * blockDim.x - 1) {
@@ -186,35 +217,44 @@ __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t 
         }
     }
 
-    ascon_final(&s, &key);
+    ascon_final(&shared_s, &key);
     if (idx == 0) {
-        memcpy(t, &s.x[3], 16);
+        memcpy(t, &shared_s.x[3], 16);
     }
 }
 
 __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result) {
+    // Increase the number of blocks and threads
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int chunk_size = clen / (gridDim.x * blockDim.x);
     int start = idx * chunk_size;
     int end = (idx == gridDim.x * blockDim.x - 1) ? clen : start + chunk_size;
 
+    __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
     ascon_loadkey(&key, k);
     ascon_initaead(&s, &key, npub);
     ascon_adata(&s, ad, adlen);
 
-    uint64_t x0 = s.x[0];
-    uint64_t x1 = s.x[1];
-    uint64_t x2 = s.x[2];
-    uint64_t x3 = s.x[3];
-    uint64_t x4 = s.x[4];
+    // Copy state to shared memory
+    if (threadIdx.x == 0) {
+        shared_s = s;
+    }
+    __syncthreads();
+
+    // Use registers for x0, x1, x2, x3, x4
+    register uint64_t x0 = shared_s.x[0];
+    register uint64_t x1 = shared_s.x[1];
+    register uint64_t x2 = shared_s.x[2];
+    register uint64_t x3 = shared_s.x[3];
+    register uint64_t x4 = shared_s.x[4];
 
     for (int i = start; i < end; i += ASCON_AEAD_RATE) {
         uint64_t cblock = ((uint64_t *)(c + i))[0];
         ((uint64_t *)(m + i))[0] = x0 ^ cblock;
         x0 = cblock;
-        ascon_permutation(&s, 6);
+        ascon_permutation(&shared_s, 6);
     }
 
     if (idx == gridDim.x * blockDim.x - 1) {
@@ -229,16 +269,18 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
         }
     }
 
-    ascon_final(&s, &key);
+    ascon_final(&shared_s, &key);
     if (idx == 0) {
-        *result = ascon_compare(t, (uint8_t *)&s.x[3], 16);
+        *result = ascon_compare(t, (uint8_t *)&shared_s.x[3], 16);
     }
 }
 
 // Helper function to convert hex string to byte array
-void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes) {
+void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
+{
     bytes.resize(hex.length() / 2);
-    for (size_t i = 0; i < bytes.size(); ++i) {
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
         std::stringstream ss;
         ss << std::hex << hex.substr(2 * i, 2);
         int byte;
@@ -248,18 +290,20 @@ void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes) {
 }
 
 // Function to read hex string from file
-std::string read_hex_from_file(const std::string &filename) {
+std::string read_hex_from_file(const std::string &filename)
+{
     std::ifstream file(filename);
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
 }
 
-int main() {
-    // Read hex input from file
-    std::string hex_input = read_hex_from_file("input_hex.txt");
+int main()
+{
+    // Read hex string from file
+    std::string hex_string = read_hex_from_file("hex.txt");
     std::vector<uint8_t> plaintext;
-    hex_to_bytes(hex_input, plaintext);
+    hex_to_bytes(hex_string, plaintext);
 
     size_t plaintext_len = plaintext.size();
     std::vector<uint8_t> ciphertext(plaintext_len + 16);
@@ -289,9 +333,13 @@ int main() {
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
 
+    // Increase the number of blocks and threads
+    int num_blocks = 16;
+    int num_threads = 256;
+
     // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_encrypt_kernel<<<1, 1>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
+    ascon_aead_encrypt_kernel<<<num_blocks, num_threads>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
     cudaDeviceSynchronize();
     auto end_encrypt = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_encrypt = end_encrypt - start_encrypt;
@@ -302,7 +350,7 @@ int main() {
 
     // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_decrypt_kernel<<<1, 1>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
+    ascon_aead_decrypt_kernel<<<num_blocks, num_threads>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
     cudaDeviceSynchronize();
     auto end_decrypt = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_decrypt = end_decrypt - start_decrypt;
@@ -312,15 +360,25 @@ int main() {
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
 
-    std::ofstream output_file("output.txt");
-    if (!output_file.is_open()) {
-        std::cerr << "Unable to open file for writing" << std::endl;
-        return -1;
+    std::cout << "Encryption result:" << std::endl;
+    for (size_t i = 0; i < ciphertext.size(); ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)ciphertext[i];
     }
+    std::cout << std::endl;
 
-    output_file << "Encryption time: " << elapsed_encrypt.count() << " seconds" << std::endl;
-    output_file << "Decryption time: " << elapsed_decrypt.count() << " seconds" << std::endl;
-    output_file << "Decryption result: " << (result == 0 ? "Success" : "Failure") << std::endl;
+    std::cout << "Decryption result:" << std::endl;
+    for (size_t i = 0; i < decrypted.size(); ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)decrypted[i];
+    }
+    std::cout << std::endl;
+
+    std::cout << "Tag:" << std::endl;
+    for (size_t i = 0; i < tag.size(); ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)tag[i];
+    }
+    std::cout << std::endl;
+
+    std::cout << "Verification result: " << (result == 0 ? "Success" : "Failure") << std::endl;
 
     cudaFree(d_plaintext);
     cudaFree(d_ciphertext);
@@ -328,9 +386,6 @@ int main() {
     cudaFree(d_nonce);
     cudaFree(d_key);
     cudaFree(d_result);
-
-    output_file.close();
-    std::cout << "Results saved to output.txt" << std::endl;
 
     return 0;
 }
