@@ -1,347 +1,122 @@
-decrypt.cu(68): error: calling a __device__ function("ascon_permutation(    ::ascon_state_t *, int)") from a __host__ __device__ function("ascon_initaead") is not allowed
-      ascon_permutation(s, 12);
-      ^
+uda24_2.cu(18): error: name must be a namespace name
 
-decrypt.cu(78): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_adata") is not allowed
-          ascon_permutation(s, 6);
-          ^
+cuda24_2.cu(55): warning: a __host__ function("ascon_loadkey") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
 
-decrypt.cu(86): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_adata") is not allowed
-      ascon_permutation(s, 6);
-      ^
+cuda24_2.cu(60): warning: a __host__ function("ascon_initaead") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
 
-decrypt.cu(97): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_decrypt") is not allowed
-          ascon_permutation(s, 6);
-          ^
+cuda24_2.cu(73): warning: a __host__ function("ascon_adata") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
 
-decrypt.cu(114): error: calling a __device__ function("_Z17ascon_permutation1?1?") from a __host__ __device__ function("ascon_final") is not allowed
-      ascon_permutation(s, 12);
-      ^
+cuda24_2.cu(90): warning: a __host__ function("ascon_encrypt") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
 
-5 errors detected in the compilation of "decrypt.cu".
-phapdn@phapdn-Jetson-AGX-Xavier:/usr/local$ sudo apt remove --purge '^cuda.*'
-Reading package lists... Done
-Building dependency tree       
-Reading state information... Done
-Note, selecting 'cuda-cuobjdump-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvprof-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit' for regex '^cuda.*'
-Note, selecting 'cuda-nsight-compute-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvprof-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvprune-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-11-config-common' for regex '^cuda.*'
-Note, selecting 'cuda-nvprune-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvgraph-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvprune-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cublas-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-gdb-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-grid' for regex '^cuda.*'
-Note, selecting 'cuda-gdb-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-curand-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cupti-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-gdb-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-visual-tools-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cupti-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-visual-tools-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cupti-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-dev-11-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-dev-11-1' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cccl-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-drivers' for regex '^cuda.*'
-Note, selecting 'cuda-thrust-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-minimal-build-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cccl-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-thrust-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-minimal-build-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cusolver-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cupti-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-runtime-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cupti-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-libraries-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cusparse-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-sanitizer-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-runtime-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cufft-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-sanitizer-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-11-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-11-1' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cusparse-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvrtc-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-npp-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-tools-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvtx-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-tools-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvtx-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-license-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvdisasm-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-samples-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-documentation-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-tools-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvtx-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-11-2' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvdisasm-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-samples-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-documentation-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvdisasm-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-documentation-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-crt-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-compat-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-compat-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-1' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-2' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-3' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-11-5' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvgraph-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cuxxfilt-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cub-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvcc-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cuxxfilt-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cub-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-profiler-api-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-tegra-repo-ubuntu2204-12-6-local' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvml-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-profiler-api-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-dev-11-0' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-dev-11-1' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvml-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-nvml-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-gpu-library-advisor-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nsight-compute-addon-l4t-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-12' for regex '^cuda.*'
-Note, selecting 'cuda-cublas-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cusolver-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-compiler-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-npp-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cudart-cross-aarch64-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-compiler-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-compiler-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-curand-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-command-line-tools-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-cufft-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-nvvm-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-driver-dev-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager-515' for regex '^cuda.*'
-Note, selecting 'cuda-command-line-tools-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager-525' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager-535' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager-550' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager-565' for regex '^cuda.*'
-Note, selecting 'cuda-driver-dev-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-command-line-tools-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-drivers-fabricmanager' for regex '^cuda.*'
-Note, selecting 'cuda-driver-dev-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-11-4-config-common' for regex '^cuda.*'
-Note, selecting 'cuda-memcheck-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-12-6' for regex '^cuda.*'
-Note, selecting 'cuda' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-12-6-config-common' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-12-config-common' for regex '^cuda.*'
-Note, selecting 'cuda-toolkit-config-common' for regex '^cuda.*'
-Note, selecting 'cuda-misc-headers-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-gdb-src-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-cuobjdump-10-0' for regex '^cuda.*'
-Note, selecting 'cuda-gdb-src-12-6' for regex '^cuda.*'
-Note, selecting 'cuda-cuobjdump-11-4' for regex '^cuda.*'
-Note, selecting 'cuda-nvprof-10-0' for regex '^cuda.*'
-Package 'cuda-drivers-fabricmanager-535' is not installed, so not removed
-Note, selecting 'cuda-cccl-12-6' instead of 'cuda-cub-12-6'
-Note, selecting 'cuda-cccl-12-6' instead of 'cuda-thrust-12-6'
-Package 'cuda-cudart-11-2' is not installed, so not removed
-Package 'cuda-nvprof-12-6' is not installed, so not removed
-Package 'cuda-drivers-grid' is not installed, so not removed
-Note, selecting 'cuda-cccl-11-4' instead of 'cuda-cub-11-4'
-Note, selecting 'cuda-cccl-11-4' instead of 'cuda-thrust-11-4'
-Package 'cuda-nvprof-11-4' is not installed, so not removed
-Package 'cuda-nvrtc-dev-11-1' is not installed, so not removed
-Package 'cuda-nvrtc-dev-11-0' is not installed, so not removed
-Package 'cuda-cudart-dev-11-1' is not installed, so not removed
-Package 'cuda-cudart-dev-11-0' is not installed, so not removed
-Package 'cuda-cudart-cross-aarch64-11-4' is not installed, so not removed
-Package 'cuda-nvcc-11-1' is not installed, so not removed
-Package 'cuda-nvcc-11-2' is not installed, so not removed
-Package 'cuda-nvcc-11-3' is not installed, so not removed
-Package 'cuda-nvcc-11-5' is not installed, so not removed
-Package 'cuda-nvcc-11-0' is not installed, so not removed
-Package 'cuda-nvrtc-11-1' is not installed, so not removed
-Package 'cuda-nvrtc-11-0' is not installed, so not removed
-Package 'cuda-command-line-tools-10-0' is not installed, so not removed
-Package 'cuda-compiler-10-0' is not installed, so not removed
-Package 'cuda-cublas-10-0' is not installed, so not removed
-Package 'cuda-cublas-dev-10-0' is not installed, so not removed
-Package 'cuda-cudart-10-0' is not installed, so not removed
-Package 'cuda-cudart-dev-10-0' is not installed, so not removed
-Package 'cuda-cufft-10-0' is not installed, so not removed
-Package 'cuda-cufft-dev-10-0' is not installed, so not removed
-Package 'cuda-cuobjdump-10-0' is not installed, so not removed
-Package 'cuda-cupti-10-0' is not installed, so not removed
-Package 'cuda-curand-10-0' is not installed, so not removed
-Package 'cuda-curand-dev-10-0' is not installed, so not removed
-Package 'cuda-cusolver-10-0' is not installed, so not removed
-Package 'cuda-cusolver-dev-10-0' is not installed, so not removed
-Package 'cuda-cusparse-10-0' is not installed, so not removed
-Package 'cuda-cusparse-dev-10-0' is not installed, so not removed
-Package 'cuda-documentation-10-0' is not installed, so not removed
-Package 'cuda-driver-dev-10-0' is not installed, so not removed
-Package 'cuda-gdb-10-0' is not installed, so not removed
-Package 'cuda-gpu-library-advisor-10-0' is not installed, so not removed
-Package 'cuda-libraries-10-0' is not installed, so not removed
-Package 'cuda-libraries-dev-10-0' is not installed, so not removed
-Package 'cuda-license-10-0' is not installed, so not removed
-Package 'cuda-memcheck-10-0' is not installed, so not removed
-Package 'cuda-misc-headers-10-0' is not installed, so not removed
-Package 'cuda-npp-10-0' is not installed, so not removed
-Package 'cuda-npp-dev-10-0' is not installed, so not removed
-Package 'cuda-nsight-compute-addon-l4t-10-0' is not installed, so not removed
-Package 'cuda-nvcc-10-0' is not installed, so not removed
-Package 'cuda-nvdisasm-10-0' is not installed, so not removed
-Package 'cuda-nvgraph-10-0' is not installed, so not removed
-Package 'cuda-nvgraph-dev-10-0' is not installed, so not removed
-Package 'cuda-nvml-dev-10-0' is not installed, so not removed
-Package 'cuda-nvprof-10-0' is not installed, so not removed
-Package 'cuda-nvprune-10-0' is not installed, so not removed
-Package 'cuda-nvrtc-10-0' is not installed, so not removed
-Package 'cuda-nvrtc-dev-10-0' is not installed, so not removed
-Package 'cuda-nvtx-10-0' is not installed, so not removed
-Package 'cuda-samples-10-0' is not installed, so not removed
-Package 'cuda-toolkit-10-0' is not installed, so not removed
-Package 'cuda-tools-10-0' is not installed, so not removed
-Package 'cuda-drivers' is not installed, so not removed
-Package 'cuda-drivers-fabricmanager-515' is not installed, so not removed
-Package 'cuda-drivers-fabricmanager-525' is not installed, so not removed
-Package 'cuda-drivers-fabricmanager-550' is not installed, so not removed
-Package 'cuda-drivers-fabricmanager-565' is not installed, so not removed
-Package 'cuda-12-6' is not installed, so not removed
-Package 'cuda-gdb-src-12-6' is not installed, so not removed
-Package 'cuda-minimal-build-12-6' is not installed, so not removed
-Package 'cuda-runtime-12-6' is not installed, so not removed
-Package 'cuda-toolkit-12' is not installed, so not removed
-Package 'cuda-toolkit' is not installed, so not removed
-Package 'cuda' is not installed, so not removed
-Package 'cuda-compat-11-4' is not installed, so not removed
-Package 'cuda-gdb-src-11-4' is not installed, so not removed
-Package 'cuda-minimal-build-11-4' is not installed, so not removed
-You might want to run 'apt --fix-broken install' to correct these.
-The following packages have unmet dependencies:
- libcublas-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libcublas-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libcufft-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                          cuda-cudart-11-2 but it is not installable
-                 Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                          cuda-cudart-11-2 but it is not installable
-                 Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libcufft-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                          cuda-cudart-11-2 but it is not installable
-                 Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                          cuda-cudart-11-2 but it is not installable
-                 Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libcufile-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libcurand-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libcurand-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                           cuda-cudart-11-2 but it is not installable
-                  Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libcusolver-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libcusolver-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libcusparse-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libcusparse-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                             cuda-cudart-11-2 but it is not installable
-                    Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libnpp-11-4 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                        cuda-cudart-11-2 but it is not installable
-               Depends: cuda-toolkit-11-config-common but it is not going to be installed or
-                        cuda-cudart-11-2 but it is not installable
-               Depends: cuda-toolkit-11-4-config-common but it is not going to be installed
- libnpp-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed or
-                        cuda-cudart-11-2 but it is not installable
-               Depends: cuda-toolkit-12-config-common but it is not going to be installed or
-                        cuda-cudart-11-2 but it is not installable
-               Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libnvfatbin-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed
-                    Depends: cuda-toolkit-12-config-common but it is not going to be installed
-                    Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libnvinfer-plugin-dev : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed
- libnvinfer-samples : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed or
-                               libnvinfer-dev-cross-aarch64 (= 8.5.2-1+cuda11.4) but it is not installable
-                      Depends: libcudart.so.11.0-dev or
-                               cuda-cudart-dev-11-1 but it is not installable or
-                               cuda-cudart-dev-11-0 but it is not installable or
-                               cuda-cudart-cross-aarch64-11-4 but it is not installable
-                      Depends: cuda-nvcc-11-1 but it is not installable or
-                               cuda-nvcc-11-2 but it is not installable or
-                               cuda-nvcc-11-3 but it is not installable or
-                               cuda-nvcc-11-4 but it is not going to be installed or
-                               cuda-nvcc-11-5 but it is not installable or
-                               cuda-nvcc-11-0 but it is not installable
- libnvinfer8 : Depends: libnvrtc.so.11.2 but it is not installable or
-                        libnvrtc.so.11.3 but it is not installable or
-                        libnvrtc.so.11.4 or
-                        cuda-nvrtc-11-1 but it is not installable or
-                        cuda-nvrtc-11-0 but it is not installable
- libnvjitlink-12-6 : Depends: cuda-toolkit-config-common but it is not going to be installed
-                     Depends: cuda-toolkit-12-config-common but it is not going to be installed
-                     Depends: cuda-toolkit-12-6-config-common but it is not going to be installed
- libnvonnxparsers-dev : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed
- libnvparsers-dev : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed
- nvidia-cuda : Depends: cuda-runtime-11-4 (= 11.4.19-1) but it is not going to be installed
- nvidia-cuda-dev : Depends: cuda-11-4 (= 11.4.19-1) but it is not going to be installed
- nvidia-l4t-jetson-multimedia-api : Depends: cuda-cudart-11-4 but it is not going to be installed
-                                    Depends: cuda-cudart-dev-11-4 but it is not going to be installed
- nvidia-opencv-dev : Depends: libopencv-python (= 4.5.4-8-g3e4c170df4) but it is not going to be installed
- nvidia-vpi-dev : Depends: vpi2-samples (= 2.4.8) but it is not going to be installed
- python3-libnvinfer-dev : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed
- tensorrt : Depends: libnvinfer-dev (= 8.5.2-1+cuda11.4) but it is not going to be installed
-E: Unmet dependencies. Try 'apt --fix-broken install' with no packages (or specify a solution).
+cuda24_2.cu(108): warning: a __host__ function("ascon_decrypt") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
+
+cuda24_2.cu(128): warning: a __host__ function("ascon_final") redeclared with __host__ __device__, hence treated as a __host__ __device__ function
+
+cuda24_2.cu(164): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(165): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(166): error: no suitable conversion function from "ascon_state_t" to "ascon_state_t *" exists
+
+cuda24_2.cu(177): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(178): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(205): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(206): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(207): error: no suitable conversion function from "ascon_state_t" to "ascon_state_t *" exists
+
+cuda24_2.cu(219): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(220): error: operator -> or ->* applied to "ascon_state_t" instead of to a pointer type
+
+cuda24_2.cu(258): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(258): error: expected a ";"
+
+cuda24_2.cu(260): error: identifier "videoFace_data" is undefined
+
+cuda24_2.cu(268): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(268): error: expected a ";"
+
+cuda24_2.cu(269): error: identifier "face_cascade" is undefined
+
+cuda24_2.cu(269): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(274): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(274): error: expected a ";"
+
+cuda24_2.cu(299): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(299): error: expected a ";"
+
+cuda24_2.cu(300): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(300): error: expected a ";"
+
+cuda24_2.cu(302): error: identifier "dot_video_writer" is undefined
+
+cuda24_2.cu(302): error: identifier "face_video_writer" is undefined
+
+cuda24_2.cu(312): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(312): error: expected a ";"
+
+cuda24_2.cu(313): error: identifier "frame" is undefined
+
+cuda24_2.cu(322): error: identifier "fixed_size" is undefined
+
+cuda24_2.cu(324): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(324): error: expected a ";"
+
+cuda24_2.cu(327): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(327): error: expected a ";"
+
+cuda24_2.cu(329): error: identifier "cv" is undefined
+
+cuda24_2.cu(329): error: expected a ">"
+
+cuda24_2.cu(329): error: expected a declaration
+
+cuda24_2.cu(330): error: identifier "face_crop" is undefined
+
+cuda24_2.cu(330): error: identifier "faces" is undefined
+
+cuda24_2.cu(330): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(394): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(394): error: expected a ";"
+
+cuda24_2.cu(399): error: identifier "color_dot_image" is undefined
+
+cuda24_2.cu(399): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(399): warning: expression has no effect
+
+cuda24_2.cu(399): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(401): error: identifier "color_dot_image" is undefined
+
+cuda24_2.cu(401): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(401): warning: expression has no effect
+
+cuda24_2.cu(401): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(405): error: identifier "color_dot_image" is undefined
+
+cuda24_2.cu(408): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(412): error: name followed by "::" must be a class or namespace name
+
+cuda24_2.cu(431): error: name followed by "::" must be a class or namespace name
+
+52 errors detected in the compilation of "cuda24_2.cu".
+
