@@ -312,7 +312,7 @@ void write_bytes_to_hex_file(const std::string &filename, const std::vector<uint
 int main()
 {
     // Read hex string from file
-    std::string hex_string = read_hex_from_file("hex.txt");
+    std::string hex_string = read_hex_from_file("frame_0.txt");
     std::vector<uint8_t> plaintext;
     hex_to_bytes(hex_string, plaintext);
 
