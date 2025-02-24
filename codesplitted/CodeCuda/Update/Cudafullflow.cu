@@ -364,6 +364,15 @@ int main()
     std::chrono::duration<double> elapsed_encrypt = end_encrypt - start_encrypt;
     std::cout << "Encryption time: " << elapsed_encrypt.count() << " seconds" << std::endl;
 
+    // Debugging: Copy the first 16 bytes of ciphertext from GPU to host and print them
+    uint8_t debug_ciphertext[16];
+    cudaMemcpy(debug_ciphertext, d_ciphertext, 16, cudaMemcpyDeviceToHost);
+    printf("First 16 bytes of encrypted data (ciphertext):\n");
+    for (int i = 0; i < 16; i++) {
+        printf("%02X ", debug_ciphertext[i]);
+    }
+    printf("\n");
+
     cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
     cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
 
@@ -405,7 +414,7 @@ int main()
 
     // Write results to files
     write_bytes_to_hex_file("encrypt.txt", ciphertext);
-    write_bytes_to_hex_file("plaintext.txt", decrypted);
+    write_bytes_to_hex_file("plaintext.txt", decrypted);    
 
     cudaFree(d_plaintext);
     cudaFree(d_ciphertext);
