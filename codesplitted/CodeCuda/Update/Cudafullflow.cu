@@ -230,6 +230,13 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     int start = idx * chunk_size;
     int end = (idx == gridDim.x * blockDim.x - 1) ? clen : start + chunk_size;
 
+    // khoi tao va luu
+    int h_result;
+    int *d_result;
+    cudaMalloc((void**)&d_result, sizeof(int));
+    ascon_aead_decrypt_kernel<<<numBlocks, threadsPerBlock>>>(m, n, c, clen, ad, adlen, npub, k, d_result);
+    cudaMemcpy(&h_result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    
     __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
@@ -273,9 +280,21 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     if (idx == 0) {
         *result = ascon_compare(t, (uint8_t *)&shared_s.x[3], 16);
     }
+    std::cout << "Result: " << h_result << std::endl;  
+
+// save into file. new modify
+    std::ofstream outFile("result.txt");  
+    if (outFile.is_open()) {  
+        outFile << h_result;  
+        outFile.close();  
+    } else {  
+        std::cerr << "Unable to open file" << std::endl;  
+    }  
+
+    cudaFree(d_result);
 }
 
-// Helper function to convert hex string to byte array
+    // Helper function to convert hex string to byte array
 void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
 {
     bytes.resize(hex.length() / 2);
