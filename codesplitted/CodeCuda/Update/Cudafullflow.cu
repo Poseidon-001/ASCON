@@ -64,13 +64,6 @@ __device__ void ascon_permutation(ascon_state_t *s, int rounds) {
         x4 = (x4 >> 7) ^ (x4 << (64 - 7)) ^ (x4 >> 41) ^ (x4 << (64 - 41));
     }
 
-    // Use __shfl_xor_sync for data transfer
-    x0 = __shfl_xor_sync(0xFFFFFFFF, x0, 1);
-    x1 = __shfl_xor_sync(0xFFFFFFFF, x1, 1);
-    x2 = __shfl_xor_sync(0xFFFFFFFF, x2, 1);
-    x3 = __shfl_xor_sync(0xFFFFFFFF, x3, 1);
-    x4 = __shfl_xor_sync(0xFFFFFFFF, x4, 1);
-
     s->x[0] = x0;
     s->x[1] = x1;
     s->x[2] = x2;
@@ -343,6 +336,15 @@ int main()
     cudaMemcpy(d_plaintext, plaintext.data(), plaintext.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
+
+    // Debugging: Copy the first 16 bytes of plaintext from GPU to host and print them
+    uint8_t debug_plaintext[16];
+    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
+    printf("First 16 bytes of plaintext on GPU:\n");
+    for (int i = 0; i < 16; i++) {
+        printf("%02X ", debug_plaintext[i]);
+    }
+    printf("\n");
 
     // Increase the number of blocks and threads
     int num_blocks = 16;
