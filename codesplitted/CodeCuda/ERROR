@@ -1,1 +1,1 @@
-cuda24_2.cu(418): error: "debug_plaintext" has already been declared in the current scope
+CUDA Memcpy Error (d_plaintext → decrypted): misaligned address
