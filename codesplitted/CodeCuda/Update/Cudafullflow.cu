@@ -217,8 +217,12 @@ __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t 
 }
 
 __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result) {
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    if (idx == 0) {
+        printf("Decryption kernel started on GPU!\n");
+    }
+
     // Increase the number of blocks and threads
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int chunk_size = clen / (gridDim.x * blockDim.x);
     int start = idx * chunk_size;
     int end = (idx == gridDim.x * blockDim.x - 1) ? clen : start + chunk_size;
