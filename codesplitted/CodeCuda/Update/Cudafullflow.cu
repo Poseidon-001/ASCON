@@ -406,7 +406,7 @@ int main()
     // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
     ascon_aead_encrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
-    cudaError_t err = cudaGetLastError();
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
     }
