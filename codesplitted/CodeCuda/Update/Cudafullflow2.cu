@@ -414,18 +414,20 @@ int main()
     // Debugging: Print the value of plaintext_len
     printf("plaintext_len = %zu\n", plaintext_len);
 
-    // Debugging: Copy d_plaintext to CPU and print the first 16 bytes before final memcpy
-    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
-    printf("First 16 bytes of d_plaintext before final memcpy:\n");
+    // Debugging: Use a temporary memory region to check before copying to host_plaintext
+    uint8_t *debug_plaintext = (uint8_t *)malloc(plaintext_len);
+    cudaMemcpy(debug_plaintext, d_plaintext, plaintext_len, cudaMemcpyDeviceToHost);
+
+    printf("First 16 bytes of debug_plaintext (copied from GPU):\n");
     for (int i = 0; i < 16; i++) {
         printf("%02X ", debug_plaintext[i]);
     }
     printf("\n");
 
-    cudaError_t err_memcpy = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
-    if (err_memcpy != cudaSuccess) {
-        printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err_memcpy));
-    }
+    // Copy from temporary memory region to host_plaintext
+    memcpy(decrypted.data(), debug_plaintext, plaintext_len);
+    free(debug_plaintext);
+
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -469,4 +471,3 @@ int main()
 
     return 0;
 }
-
