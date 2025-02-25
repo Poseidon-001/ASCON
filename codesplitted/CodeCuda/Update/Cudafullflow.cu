@@ -400,9 +400,9 @@ int main()
     }
     printf("\n");
 
-    err = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess) {
-        printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err));
+    cudaError_t err_memcpy = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
+    if (err_memcpy != cudaSuccess) {
+        printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err_memcpy));
     }
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
