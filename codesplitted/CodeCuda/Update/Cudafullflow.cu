@@ -377,8 +377,14 @@ int main()
     }
     printf("\n");
 
-    cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
-    cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
+    cudaError_t err_memcpy_tag = cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
+    if (err_memcpy_tag != cudaSuccess) {
+        printf("CUDA Memcpy Error (d_tag → tag): %s\n", cudaGetErrorString(err_memcpy_tag));
+    }
+    cudaError_t err_memcpy_ciphertext = cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
+    if (err_memcpy_ciphertext != cudaSuccess) {
+        printf("CUDA Memcpy Error (d_ciphertext → ciphertext): %s\n", cudaGetErrorString(err_memcpy_ciphertext));
+    }
 
     // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
