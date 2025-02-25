@@ -424,6 +424,13 @@ int main()
 
     std::cout << "Verification result: " << (result == 0 ? "Success" : "Failure") << std::endl;
 
+    // Debugging: Print the first 16 bytes of the final decrypted output
+    printf("First 16 bytes of final decrypted output:\n");
+    for (int i = 0; i < 16; i++) {
+        printf("%02X ", decrypted[i]);
+    }
+    printf("\n");
+
     // Write results to files
     write_bytes_to_hex_file("encrypt.txt", ciphertext);
     write_bytes_to_hex_file("plaintext.txt", decrypted);    
