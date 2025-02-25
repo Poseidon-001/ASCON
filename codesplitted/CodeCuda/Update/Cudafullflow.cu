@@ -411,6 +411,9 @@ int main()
         printf("Error: decrypted.data() is NULL!\n");
     }
 
+    // Debugging: Print the value of plaintext_len
+    printf("plaintext_len = %zu\n", plaintext_len);
+
     cudaError_t err_memcpy = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
     if (err_memcpy != cudaSuccess) {
         printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err_memcpy));
