@@ -414,8 +414,8 @@ int main()
     // Debugging: Print the value of plaintext_len
     printf("plaintext_len = %zu\n", plaintext_len);
 
-    // Debugging: Use a temporary memory region to check before copying to host_plaintext
-    uint8_t *debug_plaintext = (uint8_t *)malloc(plaintext_len);
+    // Debugging: Reuse debug_plaintext by resetting its value and copying data again
+    memset(debug_plaintext, 0, plaintext_len);
     cudaMemcpy(debug_plaintext, d_plaintext, plaintext_len, cudaMemcpyDeviceToHost);
 
     printf("First 16 bytes of debug_plaintext (copied from GPU):\n");
@@ -426,7 +426,6 @@ int main()
 
     // Copy from temporary memory region to host_plaintext
     memcpy(decrypted.data(), debug_plaintext, plaintext_len);
-    free(debug_plaintext);
 
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
