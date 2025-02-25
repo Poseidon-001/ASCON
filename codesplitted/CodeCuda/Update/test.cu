@@ -16,6 +16,8 @@
 #define RATE 8
 #endif
 
+#define NUM_FILES 24
+
 using namespace std;
 
 // Helper functions
@@ -81,10 +83,8 @@ __device__ void ascon_initaead(ascon_state_t *s, const ascon_key_t *key, const u
 {
     memset(s, 0, sizeof(ascon_state_t));
     s->x[0] = 0x80400c0600000000ULL ^ ((uint64_t)CRYPTO_KEYBYTES << 56) ^ ((uint64_t)ASCON_AEAD_RATE << 48);
-    s->x[1] = key->x[0];
-    s->x[2] = key->x[1];
-    s->x[3] = ((uint64_t *)npub)[0];
-    s->x[4] = ((uint64_t *)npub)[1];
+    memcpy(&s->x[1], key->b, 16);
+    memcpy(&s->x[3], npub, 16);
     ascon_permutation(s, 12);
     s->x[3] ^= key->x[0];
     s->x[4] ^= key->x[1];
@@ -94,7 +94,9 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
 {
     while (adlen >= ASCON_AEAD_RATE)
     {
-        s->x[0] ^= ((uint64_t *)ad)[0];
+        uint64_t block;
+        memcpy(&block, ad, ASCON_AEAD_RATE);
+        s->x[0] ^= block;
         ascon_permutation(s, 6);
         ad += ASCON_AEAD_RATE;
         adlen -= ASCON_AEAD_RATE;
@@ -102,7 +104,9 @@ __device__ void ascon_adata(ascon_state_t *s, const uint8_t *ad, uint64_t adlen)
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
     memcpy(lastblock, ad, adlen);
     lastblock[adlen] = 0x80;
-    s->x[0] ^= ((uint64_t *)lastblock)[0];
+    uint64_t block;
+    memcpy(&block, lastblock, ASCON_AEAD_RATE);
+    s->x[0] ^= block;
     ascon_permutation(s, 6);
     s->x[4] ^= 1;
 }
@@ -111,8 +115,10 @@ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, ui
 {
     while (mlen >= ASCON_AEAD_RATE)
     {
-        s->x[0] ^= ((uint64_t *)m)[0];
-        ((uint64_t *)c)[0] = s->x[0];
+        uint64_t block;
+        memcpy(&block, m, ASCON_AEAD_RATE);
+        s->x[0] ^= block;
+        memcpy(c, &s->x[0], ASCON_AEAD_RATE);
         ascon_permutation(s, 6);
         m += ASCON_AEAD_RATE;
         c += ASCON_AEAD_RATE;
@@ -121,7 +127,9 @@ __device__ void ascon_encrypt(ascon_state_t *s, uint8_t *c, const uint8_t *m, ui
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
     memcpy(lastblock, m, mlen);
     lastblock[mlen] = 0x80;
-    s->x[0] ^= ((uint64_t *)lastblock)[0];
+    uint64_t block;
+    memcpy(&block, lastblock, ASCON_AEAD_RATE);
+    s->x[0] ^= block;
     memcpy(c, &s->x[0], mlen);
 }
 
@@ -129,8 +137,10 @@ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, ui
 {
     while (clen >= ASCON_AEAD_RATE)
     {
-        uint64_t cblock = ((uint64_t *)c)[0];
-        ((uint64_t *)m)[0] = s->x[0] ^ cblock;
+        uint64_t cblock;
+        memcpy(&cblock, c, ASCON_AEAD_RATE);
+        uint64_t mblock = s->x[0] ^ cblock;
+        memcpy(m, &mblock, ASCON_AEAD_RATE);
         s->x[0] = cblock;
         ascon_permutation(s, 6);
         c += ASCON_AEAD_RATE;
@@ -140,8 +150,10 @@ __device__ void ascon_decrypt(ascon_state_t *s, uint8_t *m, const uint8_t *c, ui
     uint8_t lastblock[ASCON_AEAD_RATE] = {0};
     memcpy(lastblock, c, clen);
     lastblock[clen] = 0x80;
-    uint64_t cblock = ((uint64_t *)lastblock)[0];
-    ((uint64_t *)m)[0] = s->x[0] ^ cblock;
+    uint64_t cblock;
+    memcpy(&cblock, lastblock, ASCON_AEAD_RATE);
+    uint64_t mblock = s->x[0] ^ cblock;
+    memcpy(m, &mblock, clen);
     s->x[0] = cblock;
 }
 
@@ -166,27 +178,27 @@ __device__ int ascon_compare(const uint8_t *a, const uint8_t *b, size_t len)
     return 0;
 }
 
-__global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k) {
-    // Increase the number of blocks and threads
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int chunk_size = mlen / (gridDim.x * blockDim.x);
-    int start = idx * chunk_size;
-    int end = (idx == gridDim.x * blockDim.x - 1) ? mlen : start + chunk_size;
+__global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t *m, uint64_t mlen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int num_files) {
+    int file_idx = blockIdx.x;
+    if (file_idx >= num_files) return;
+
+    int idx = threadIdx.x;
+    int chunk_size = mlen / blockDim.x;
+    int start = file_idx * mlen + idx * chunk_size;
+    int end = (idx == blockDim.x - 1) ? (file_idx + 1) * mlen : start + chunk_size;
 
     __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
-    ascon_loadkey(&key, k);
-    ascon_initaead(&s, &key, npub);
+    ascon_loadkey(&key, k + file_idx * 16);
+    ascon_initaead(&s, &key, npub + file_idx * 16);
     ascon_adata(&s, ad, adlen);
 
-    // Copy state to shared memory
     if (threadIdx.x == 0) {
         shared_s = s;
     }
     __syncthreads();
 
-    // Use registers for x0, x1, x2, x3, x4
     register uint64_t x0 = shared_s.x[0];
     register uint64_t x1 = shared_s.x[1];
     register uint64_t x2 = shared_s.x[2];
@@ -194,53 +206,53 @@ __global__ void ascon_aead_encrypt_kernel(uint8_t *t, uint8_t *c, const uint8_t 
     register uint64_t x4 = shared_s.x[4];
 
     for (int i = start; i < end; i += ASCON_AEAD_RATE) {
-        x0 ^= ((uint64_t *)(m + i))[0];
-        ((uint64_t *)(c + i))[0] = x0;
+        uint64_t block;
+        memcpy(&block, m + i, ASCON_AEAD_RATE);
+        x0 ^= block;
+        memcpy(c + i, &x0, ASCON_AEAD_RATE);
         ascon_permutation(&shared_s, 6);
     }
 
-    if (idx == gridDim.x * blockDim.x - 1) {
+    if (idx == blockDim.x - 1) {
         int remaining = mlen % ASCON_AEAD_RATE;
         if (remaining > 0) {
             uint8_t lastblock[ASCON_AEAD_RATE] = {0};
             memcpy(lastblock, m + end, remaining);
             lastblock[remaining] = 0x80;
-            x0 ^= ((uint64_t *)lastblock)[0];
+            uint64_t block;
+            memcpy(&block, lastblock, ASCON_AEAD_RATE);
+            x0 ^= block;
             memcpy(c + end, &x0, remaining);
         }
     }
 
     ascon_final(&shared_s, &key);
     if (idx == 0) {
-        memcpy(t, &shared_s.x[3], 16);
+        memcpy(t + file_idx * 16, &shared_s.x[3], 16);
     }
 }
 
-__global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result) {
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (idx == 0) {
-        printf("Decryption kernel started on GPU!\n");
-    }
+__global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const uint8_t *c, uint64_t clen, const uint8_t *ad, uint64_t adlen, const uint8_t *npub, const uint8_t *k, int *result, int num_files) {
+    int file_idx = blockIdx.x;
+    if (file_idx >= num_files) return;
 
-    // Increase the number of blocks and threads
-    int chunk_size = clen / (gridDim.x * blockDim.x);
-    int start = idx * chunk_size;
-    int end = (idx == gridDim.x * blockDim.x - 1) ? clen : start + chunk_size;
+    int idx = threadIdx.x;
+    int chunk_size = clen / blockDim.x;
+    int start = file_idx * clen + idx * chunk_size;
+    int end = (idx == blockDim.x - 1) ? (file_idx + 1) * clen : start + chunk_size;
 
     __shared__ ascon_state_t shared_s;
     ascon_state_t s;
     ascon_key_t key;
-    ascon_loadkey(&key, k);
-    ascon_initaead(&s, &key, npub);
+    ascon_loadkey(&key, k + file_idx * 16);
+    ascon_initaead(&s, &key, npub + file_idx * 16);
     ascon_adata(&s, ad, adlen);
 
-    // Copy state to shared memory
     if (threadIdx.x == 0) {
         shared_s = s;
     }
     __syncthreads();
 
-    // Use registers for x0, x1, x2, x3, x4
     register uint64_t x0 = shared_s.x[0];
     register uint64_t x1 = shared_s.x[1];
     register uint64_t x2 = shared_s.x[2];
@@ -248,34 +260,38 @@ __global__ void ascon_aead_decrypt_kernel(uint8_t *m, const uint8_t *t, const ui
     register uint64_t x4 = shared_s.x[4];
 
     for (int i = start; i < end; i += ASCON_AEAD_RATE) {
-        uint64_t cblock = ((uint64_t *)(c + i))[0];
-        ((uint64_t *)(m + i))[0] = x0 ^ cblock;
+        uint64_t cblock;
+        memcpy(&cblock, c + i, ASCON_AEAD_RATE);
+        uint64_t mblock = x0 ^ cblock;
+        memcpy(m + i, &mblock, ASCON_AEAD_RATE);
         x0 = cblock;
         ascon_permutation(&shared_s, 6);
     }
 
-    if (idx == gridDim.x * blockDim.x - 1) {
+    if (idx == blockDim.x - 1) {
         int remaining = clen % ASCON_AEAD_RATE;
         if (remaining > 0) {
             uint8_t lastblock[ASCON_AEAD_RATE] = {0};
             memcpy(lastblock, c + end, remaining);
             lastblock[remaining] = 0x80;
-            uint64_t cblock = ((uint64_t *)lastblock)[0];
-            ((uint64_t *)(m + end))[0] = x0 ^ cblock;
+            uint64_t cblock;
+            memcpy(&cblock, lastblock, ASCON_AEAD_RATE);
+            uint64_t mblock = x0 ^ cblock;
+            memcpy(m + end, &mblock, remaining);
             x0 = cblock;
         }
     }
 
     ascon_final(&shared_s, &key);
     if (idx == 0) {
-        *result = ascon_compare(t, (uint8_t *)&shared_s.x[3], 16);
+        result[file_idx] = ascon_compare(t + file_idx * 16, (uint8_t *)&shared_s.x[3], 16);
     }
 }
 
 // Helper function to convert hex string to byte array
 void hex_to_bytes(const std::string &hex, std::vector<uint8_t> &bytes)
 {
-    bytes.resize(hex.length() / 2);
+    bytes.resize((hex.length() + 1) / 2); // Ensure 8-byte alignment
     for (size_t i = 0; i < bytes.size(); ++i)
     {
         std::stringstream ss;
@@ -308,58 +324,90 @@ void write_bytes_to_hex_file(const std::string &filename, const std::vector<uint
 
 int main()
 {
-    // Read hex string from file
-    std::string hex_string = read_hex_from_file("frame_0.txt");
-    std::vector<uint8_t> plaintext;
-    hex_to_bytes(hex_string, plaintext);
+    std::vector<std::vector<uint8_t>> plaintexts(NUM_FILES);
+    std::vector<std::vector<uint8_t>> ciphertexts(NUM_FILES);
+    std::vector<std::vector<uint8_t>> decrypted(NUM_FILES);
+    std::vector<uint8_t> tags(NUM_FILES * 16);
+    std::vector<uint8_t> keys(NUM_FILES * 16);
+    std::vector<uint8_t> nonces(NUM_FILES * 16);
+    std::vector<int> results(NUM_FILES);
 
-    size_t plaintext_len = plaintext.size();
-    std::vector<uint8_t> ciphertext(plaintext_len + 16);
-    std::vector<uint8_t> tag(16);
-    std::vector<uint8_t> decrypted(plaintext_len);
+    for (int i = 0; i < NUM_FILES; ++i) {
+        std::string hex_string = read_hex_from_file("frame_" + std::to_string(i) + ".txt");
+        hex_to_bytes(hex_string, plaintexts[i]);
+        ciphertexts[i].resize((plaintexts[i].size() + 15) / 16 * 16); // Ensure 8-byte alignment
+        decrypted[i].resize((plaintexts[i].size() + 15) / 16 * 16); // Ensure 8-byte alignment
+    }
 
-    std::vector<uint8_t> key(16);
-    std::vector<uint8_t> nonce(16);
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(0, 255);
-    for (auto &byte : key)
-        byte = dis(gen);
-    for (auto &byte : nonce)
-        byte = dis(gen);
-
-    uint8_t *d_plaintext, *d_ciphertext, *d_tag, *d_nonce, *d_key;
-    int *d_result;
-    cudaMalloc(&d_plaintext, plaintext.size());
-    cudaMalloc(&d_ciphertext, ciphertext.size());
-    cudaMalloc(&d_tag, tag.size());
-    cudaMalloc(&d_nonce, nonce.size());
-    cudaMalloc(&d_key, key.size());
-    cudaMalloc(&d_result, sizeof(int));
-
-    cudaMemcpy(d_plaintext, plaintext.data(), plaintext.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
-
-    // Debugging: Copy the first 16 bytes of plaintext from GPU to host and print them
-    uint8_t debug_plaintext[16];
-    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
-    printf("First 16 bytes of plaintext on GPU:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", debug_plaintext[i]);
+    for (int i = 0; i < NUM_FILES; ++i) {
+        for (int j = 0; j < 16; ++j) {
+            keys[i * 16 + j] = dis(gen);
+            nonces[i * 16 + j] = dis(gen);
+        }
     }
-    printf("\n");
 
-    // Increase the number of blocks and threads
+    uint8_t *d_plaintexts, *d_ciphertexts, *d_tags, *d_nonces, *d_keys;
+    int *d_results;
+    cudaError_t err;
+
+    size_t total_plaintext_size = 0;
+    for (const auto& pt : plaintexts) {
+        total_plaintext_size += (pt.size() + 15) / 16 * 16;
+    }
+
+    err = cudaMalloc(&d_plaintexts, total_plaintext_size);
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_plaintexts): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_ciphertexts, total_plaintext_size);
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_ciphertexts): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_tags, tags.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_tags): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_nonces, nonces.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_nonces): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_keys, keys.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_keys): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_results, sizeof(int) * NUM_FILES);
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_results): %s\n", cudaGetErrorString(err));
+    }
+
+    size_t offset = 0;
+    for (int i = 0; i < NUM_FILES; ++i) {
+        err = cudaMemcpy(d_plaintexts + offset, plaintexts[i].data(), plaintexts[i].size(), cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) {
+            printf("CUDA Memcpy Error (plaintexts[%d] → d_plaintexts): %s\n", i, cudaGetErrorString(err));
+        }
+        offset += (plaintexts[i].size() + 15) / 16 * 16;
+    }
+    err = cudaMemcpy(d_nonces, nonces.data(), nonces.size(), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        printf("CUDA Memcpy Error (nonces → d_nonces): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMemcpy(d_keys, keys.data(), keys.size(), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        printf("CUDA Memcpy Error (keys → d_keys): %s\n", cudaGetErrorString(err));
+    }
+
     int threadsPerBlock = 256;
-    int numBlocks = (plaintext_len + threadsPerBlock - 1) / threadsPerBlock;
+    int numBlocks = NUM_FILES;
 
     printf("Kernel launch config: numBlocks=%d, threadsPerBlock=%d\n", numBlocks, threadsPerBlock);
 
-    // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_encrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
-    cudaError_t err = cudaGetLastError();
+    ascon_aead_encrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_tags, d_ciphertexts, d_plaintexts, plaintexts[0].size(), nullptr, 0, d_nonces, d_keys, NUM_FILES);
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
     }
@@ -368,27 +416,21 @@ int main()
     std::chrono::duration<double> elapsed_encrypt = end_encrypt - start_encrypt;
     std::cout << "Encryption time: " << elapsed_encrypt.count() << " seconds" << std::endl;
 
-    // Debugging: Copy the first 16 bytes of ciphertext from GPU to host and print them
-    uint8_t debug_ciphertext[16];
-    cudaMemcpy(debug_ciphertext, d_ciphertext, 16, cudaMemcpyDeviceToHost);
-    printf("First 16 bytes of encrypted data (ciphertext):\n");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", debug_ciphertext[i]);
+    err = cudaMemcpy(tags.data(), d_tags, tags.size(), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        printf("CUDA Memcpy Error (d_tags → tags): %s\n", cudaGetErrorString(err));
     }
-    printf("\n");
-
-    cudaError_t err_memcpy_tag = cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
-    if (err_memcpy_tag != cudaSuccess) {
-        printf("CUDA Memcpy Error (d_tag → tag): %s\n", cudaGetErrorString(err_memcpy_tag));
-    }
-    cudaError_t err_memcpy_ciphertext = cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
-    if (err_memcpy_ciphertext != cudaSuccess) {
-        printf("CUDA Memcpy Error (d_ciphertext → ciphertext): %s\n", cudaGetErrorString(err_memcpy_ciphertext));
+    offset = 0;
+    for (int i = 0; i < NUM_FILES; ++i) {
+        err = cudaMemcpy(ciphertexts[i].data(), d_ciphertexts + offset, ciphertexts[i].size(), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            printf("CUDA Memcpy Error (d_ciphertexts → ciphertexts[%d]): %s\n", i, cudaGetErrorString(err));
+        }
+        offset += (ciphertexts[i].size() + 15) / 16 * 16;
     }
 
-    // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
-    ascon_aead_decrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_plaintext, d_tag, d_ciphertext, plaintext_len + 16, nullptr, 0, d_nonce, d_key, d_result);
+    ascon_aead_decrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_plaintexts, d_tags, d_ciphertexts, plaintexts[0].size() + 16, nullptr, 0, d_nonces, d_keys, d_results, NUM_FILES);
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
@@ -398,74 +440,52 @@ int main()
     std::chrono::duration<double> elapsed_decrypt = end_decrypt - start_decrypt;
     std::cout << "Decryption time: " << elapsed_decrypt.count() << " seconds" << std::endl;
 
-    // Debugging: Copy the first 16 bytes of decrypted data from GPU to host and print them
-    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
-    printf("First 16 bytes of decrypted data on GPU:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", debug_plaintext[i]);
+    offset = 0;
+    for (int i = 0; i < NUM_FILES; ++i) {
+        err = cudaMemcpy(decrypted[i].data(), d_plaintexts + offset, decrypted[i].size(), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            printf("CUDA Memcpy Error (d_plaintexts → decrypted[%d]): %s\n", i, cudaGetErrorString(err));
+        }
+        offset += (decrypted[i].size() + 15) / 16 * 16;
     }
-    printf("\n");
-
-    // Debugging: Check memory addresses before cudaMemcpy
-    if (decrypted.data() == NULL) {
-        printf("Error: decrypted.data() is NULL!\n");
+    err = cudaMemcpy(results.data(), d_results, sizeof(int) * NUM_FILES, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        printf("CUDA Memcpy Error (d_results → results): %s\n", cudaGetErrorString(err));
     }
 
-    // Debugging: Print the value of plaintext_len
-    printf("plaintext_len = %zu\n", plaintext_len);
+    for (int i = 0; i < NUM_FILES; ++i) {
+        std::cout << "File " << i << " encryption result:" << std::endl;
+        for (size_t j = 0; j < ciphertexts[i].size(); ++j) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)ciphertexts[i][j];
+        }
+        std::cout << std::endl;
 
-    // Debugging: Copy d_plaintext to CPU and print the first 16 bytes before final memcpy
-    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
-    printf("First 16 bytes of d_plaintext before final memcpy:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", debug_plaintext[i]);
+        std::cout << "File " << i << " decryption result:" << std::endl;
+        for (size_t j = 0; j < decrypted[i].size(); ++j) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)decrypted[i][j];
+        }
+        std::cout << std::endl;
+
+        std::cout << "File " << i << " tag:" << std::endl;
+        for (int j = 0; j < 16; ++j) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)tags[i * 16 + j];
+        }
+        std::cout << std::endl;
+
+        std::cout << "File " << i << " verification result: " << (results[i] == 0 ? "Success" : "Failure") << std::endl;
     }
-    printf("\n");
 
-    cudaError_t err_memcpy = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
-    if (err_memcpy != cudaSuccess) {
-        printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err_memcpy));
+    for (int i = 0; i < NUM_FILES; ++i) {
+        write_bytes_to_hex_file("encrypt_" + std::to_string(i) + ".txt", ciphertexts[i]);
+        write_bytes_to_hex_file("plaintext_" + std::to_string(i) + ".txt", decrypted[i]);
     }
-    int result;
-    cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
 
-    std::cout << "Encryption result:" << std::endl;
-    for (size_t i = 0; i < ciphertext.size(); ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)ciphertext[i];
-    }
-    std::cout << std::endl;
-
-    std::cout << "Decryption result:" << std::endl;
-    for (size_t i = 0; i < decrypted.size(); ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)decrypted[i];
-    }
-    std::cout << std::endl;
-
-    std::cout << "Tag:" << std::endl;
-    for (size_t i = 0; i < tag.size(); ++i) {
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)tag[i];
-    }
-    std::cout << std::endl;
-
-    std::cout << "Verification result: " << (result == 0 ? "Success" : "Failure") << std::endl;
-
-    // Debugging: Print the first 16 bytes of the final decrypted output
-    printf("First 16 bytes of final decrypted output:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("%02X ", decrypted[i]);
-    }
-    printf("\n");
-
-    // Write results to files
-    write_bytes_to_hex_file("encrypt.txt", ciphertext);
-    write_bytes_to_hex_file("plaintext.txt", decrypted);    
-
-    cudaFree(d_plaintext);
-    cudaFree(d_ciphertext);
-    cudaFree(d_tag);
-    cudaFree(d_nonce);
-    cudaFree(d_key);
-    cudaFree(d_result);
+    cudaFree(d_plaintexts);
+    cudaFree(d_ciphertexts);
+    cudaFree(d_tags);
+    cudaFree(d_nonces);
+    cudaFree(d_keys);
+    cudaFree(d_results);
 
     return 0;
 }
