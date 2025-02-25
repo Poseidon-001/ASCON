@@ -330,12 +330,43 @@ int main()
 
     uint8_t *d_plaintext, *d_ciphertext, *d_tag, *d_nonce, *d_key;
     int *d_result;
-    cudaMalloc(&d_plaintext, plaintext.size());
-    cudaMalloc(&d_ciphertext, ciphertext.size());
-    cudaMalloc(&d_tag, tag.size());
-    cudaMalloc(&d_nonce, nonce.size());
-    cudaMalloc(&d_key, key.size());
-    cudaMalloc(&d_result, sizeof(int));
+
+    // Debugging: Check for errors after cudaMalloc
+    cudaError_t err = cudaMalloc(&d_plaintext, plaintext.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_plaintext): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_ciphertext, ciphertext.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_ciphertext): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_tag, tag.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_tag): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_nonce, nonce.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_nonce): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_key, key.size());
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_key): %s\n", cudaGetErrorString(err));
+    }
+    err = cudaMalloc(&d_result, sizeof(int));
+    if (err != cudaSuccess) {
+        printf("CUDA Malloc Error (d_result): %s\n", cudaGetErrorString(err));
+    }
+
+    // Debugging: Check memory addresses before cudaMemcpy
+    if (plaintext.data() == NULL) {
+        printf("Error: plaintext.data() is NULL!\n");
+    }
+    if (nonce.data() == NULL) {
+        printf("Error: nonce.data() is NULL!\n");
+    }
+    if (key.data() == NULL) {
+        printf("Error: key.data() is NULL!\n");
+    }
 
     cudaMemcpy(d_plaintext, plaintext.data(), plaintext.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_nonce, nonce.data(), nonce.size(), cudaMemcpyHostToDevice);
@@ -359,7 +390,7 @@ int main()
     // Measure encryption time
     auto start_encrypt = std::chrono::high_resolution_clock::now();
     ascon_aead_encrypt_kernel<<<numBlocks, threadsPerBlock>>>(d_tag, d_ciphertext, d_plaintext, plaintext_len, nullptr, 0, d_nonce, d_key);
-    cudaError_t err = cudaGetLastError();
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Kernel Error: %s\n", cudaGetErrorString(err));
     }
@@ -378,7 +409,7 @@ int main()
     printf("\n");
 
     cudaMemcpy(tag.data(), d_tag, tag.size(), cudaMemcpyDeviceToHost);
-    cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyDeviceToHost);
+    cudaMemcpy(ciphertext.data(), d_ciphertext, ciphertext.size(), cudaMemcpyHostToDevice);
 
     // Measure decryption time
     auto start_decrypt = std::chrono::high_resolution_clock::now();
