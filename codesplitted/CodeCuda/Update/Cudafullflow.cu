@@ -406,6 +406,11 @@ int main()
     }
     printf("\n");
 
+    // Debugging: Check memory addresses before cudaMemcpy
+    if (decrypted.data() == NULL) {
+        printf("Error: decrypted.data() is NULL!\n");
+    }
+
     cudaError_t err_memcpy = cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
     if (err_memcpy != cudaSuccess) {
         printf("CUDA Memcpy Error (d_plaintext → decrypted): %s\n", cudaGetErrorString(err_memcpy));
