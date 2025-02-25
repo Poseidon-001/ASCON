@@ -1,1 +1,1 @@
-CUDA Memcpy Error (d_plaintext → decrypted): misaligned address
+cuda24_2.cu(409): error: "err" has already been declared in the current scope
