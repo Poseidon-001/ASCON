@@ -392,6 +392,14 @@ int main()
     std::chrono::duration<double> elapsed_decrypt = end_decrypt - start_decrypt;
     std::cout << "Decryption time: " << elapsed_decrypt.count() << " seconds" << std::endl;
 
+    // Debugging: Copy the first 16 bytes of decrypted data from GPU to host and print them
+    cudaMemcpy(debug_plaintext, d_plaintext, 16, cudaMemcpyDeviceToHost);
+    printf("First 16 bytes of decrypted data on GPU:\n");
+    for (int i = 0; i < 16; i++) {
+        printf("%02X ", debug_plaintext[i]);
+    }
+    printf("\n");
+
     cudaMemcpy(decrypted.data(), d_plaintext, decrypted.size(), cudaMemcpyDeviceToHost);
     int result;
     cudaMemcpy(&result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
