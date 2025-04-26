@@ -2,115 +2,19 @@ COMPILE CODE :
 nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
 
 ERROR LIST :
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame
-ascon_1frame.cu(1166): error: transfer of control bypasses initialization of:
-            variable "num_iterations"
-(1192): here
-            variable "encryption_time"
-(1214): here
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc ascon_cuda_backup.cu -o ascon_cuda_backup
+ascon_cuda_backup.cu(96): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1173): error: transfer of control bypasses initialization of:
-            variable "num_iterations"
-(1192): here
-            variable "encryption_time"
-(1214): here
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(119): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1188): error: transfer of control bypasses initialization of:
-            variable "num_iterations"
-(1192): here
-            variable "encryption_time"
-(1214): here
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(150): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1203): error: transfer of control bypasses initialization of:
-            variable "encryption_time"
-(1214): here
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(178): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1211): error: transfer of control bypasses initialization of:
-            variable "encryption_time"
-(1214): here
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(189): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1220): error: transfer of control bypasses initialization of:
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(330): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1231): error: transfer of control bypasses initialization of:
-            variable "decrypt_success"
-(1235): here
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
+ascon_cuda_backup.cu(413): error: identifier "ascon_permutation_device" is undefined
 
-ascon_1frame.cu(1246): error: transfer of control bypasses initialization of:
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
-
-ascon_1frame.cu(1254): error: transfer of control bypasses initialization of:
-            variable "decryption_time"
-(1257): here
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
-
-ascon_1frame.cu(1263): error: transfer of control bypasses initialization of:
-            variable "output_file"
-(1280): here
-            variable "is_correct"
-(1281): here
-
-ascon_1frame.cu(1386): warning: variable "S" was declared but never referenced
-
-10 errors detected in the compilation of "ascon_1frame.cu".
+7 errors detected in the compilation of "ascon_cuda_backup.cu".
