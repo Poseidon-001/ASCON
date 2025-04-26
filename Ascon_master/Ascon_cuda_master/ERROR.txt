@@ -1,7 +1,1 @@
-ascon_cuda_testing.cu(334): warning: variable "s_block" was declared but never referenced
-
-ascon_cuda_testing.cu(337): warning: variable "warp_id" was declared but never referenced
-
-ascon_cuda_testing.cu(527): error: identifier "streams" is undefined
-
-1 error detected in the compilation of "ascon_cuda_testing.cu".
+CUDA error in ascon_cuda_testing.cu:741: invalid argument
