@@ -2,40 +2,281 @@ COMPILE CODE :
 nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
 
 ERROR LIST :
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc ascon_1frame.cu -o ascon_1frame
-ascon_1frame.cu(96): error: identifier "ascon_permutation_device" is undefined
+hapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame
+ascon_1frame.cu(654): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(119): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(660): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(150): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(667): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(178): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(674): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(189): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(682): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(330): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(644): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(413): error: identifier "ascon_permutation_device" is undefined
+ascon_1frame.cu(595): error: transfer of control bypasses initialization of:
+            variable "ad_size"
+(622): here
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-7 errors detected in the compilation of "ascon_1frame.cu".
+ascon_1frame.cu(602): error: transfer of control bypasses initialization of:
+            variable "ad_size"
+(622): here
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
+ascon_1frame.cu(610): error: transfer of control bypasses initialization of:
+            variable "ad_size"
+(622): here
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
-ascon_1frame.cu(323): warning: result of call is not used
+ascon_1frame.cu(619): error: transfer of control bypasses initialization of:
+            variable "ad_size"
+(622): here
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(334): warning: variable "shared_S" was declared but never referenced
+ascon_1frame.cu(630): error: transfer of control bypasses initialization of:
+            variable "num_blocks"
+(686): here
+            variable "optimal_threads_per_block"
+(689): here
+            variable "warps_per_block"
+(692): here
+            variable "optimal_blocks_per_sm"
+(693): here
+            variable "optimal_blocks"
+(694): here
+            variable "thread_blocks"
+(697): here
 
-ascon_1frame.cu(521): error: no instance of overloaded function "atomicExch" matches the argument list
-            argument types are: (uint8_t *, int)
-
-ascon_1frame.cu(824): error: transfer of control bypasses initialization of:
+ascon_1frame.cu(1034): error: transfer of control bypasses initialization of:
+            variable "num_iterations"
+(1060): here
+            variable "encryption_time"
+(1082): here
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
             variable "is_correct"
-(837): here
+(1149): here
 
-2 errors detected in the compilation of "ascon_1frame.cu".
+ascon_1frame.cu(1041): error: transfer of control bypasses initialization of:
+            variable "num_iterations"
+(1060): here
+            variable "encryption_time"
+(1082): here
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
 
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
-ascon_1frame.cu(323): warning: result of call is not used
+ascon_1frame.cu(1056): error: transfer of control bypasses initialization of:
+            variable "num_iterations"
+(1060): here
+            variable "encryption_time"
+(1082): here
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1071): error: transfer of control bypasses initialization of:
+            variable "encryption_time"
+(1082): here
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1079): error: transfer of control bypasses initialization of:
+            variable "encryption_time"
+(1082): here
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1088): error: transfer of control bypasses initialization of:
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1099): error: transfer of control bypasses initialization of:
+            variable "decrypt_success"
+(1103): here
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1114): error: transfer of control bypasses initialization of:
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1122): error: transfer of control bypasses initialization of:
+            variable "decryption_time"
+(1125): here
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1131): error: transfer of control bypasses initialization of:
+            variable "output_file"
+(1148): here
+            variable "is_correct"
+(1149): here
+
+ascon_1frame.cu(1254): warning: variable "S" was declared but never referenced
+
+21 errors detected in the compilation of "ascon_1frame.cu".
+
 
 ascon_1frame.cu(821): error: transfer of control bypasses initialization of:
             variable "is_correct"
