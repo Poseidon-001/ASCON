@@ -5,7 +5,7 @@
     #include <string.h>
     #include <assert.h>
     #include <cuda_runtime.h>
-
+    //compile : nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
     // Cấu hình CUDA tối ưu cho Jetson Xavier AGX
     #define BLOCK_SIZE 128          // Số thread trong một block - giảm xuống để phù hợp với L1 cache
     #define MAX_GRID_SIZE 65535     // Số block tối đa trong một grid
