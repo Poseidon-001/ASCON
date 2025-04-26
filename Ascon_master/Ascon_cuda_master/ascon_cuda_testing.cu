@@ -28,6 +28,21 @@
     } \
 }
 
+#define MAX_BUFFER_SIZE (1024 * 1024 * 1024)  // 1GB
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#define MAX_SHARED_MEMORY 49152  // 48KB shared memory
+
+// Thêm macro kiểm tra lỗi chi tiết hơn
+#define CHECK_CUDA_ERROR_DETAILED(call) \
+{ \
+    cudaError_t err = call; \
+    if (err != cudaSuccess) { \
+        fprintf(stderr, "CUDA error in %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+        fprintf(stderr, "Error code: %d\n", err); \
+        exit(EXIT_FAILURE); \
+    } \
+}
+
 __device__ __host__ void zero_bytes_device(uint8_t *bytes, size_t n) {
     for (size_t i = 0; i < n; i++) {
         bytes[i] = 0;
@@ -315,14 +330,25 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
     // Sử dụng shared memory cho key và nonce
     __shared__ uint8_t s_key[16];
     __shared__ uint8_t s_nonce[16];
-    __shared__ uint8_t s_ad[256];  // Thêm shared memory cho associated data
+    __shared__ uint8_t s_ad[256];
+    __shared__ uint8_t s_block[16];
     
-    // Load key và nonce vào shared memory
-    if (threadIdx.x < 16) {
-        s_key[threadIdx.x] = key[threadIdx.x];
-        s_nonce[threadIdx.x] = nonce[threadIdx.x];
+    // Tối ưu warp-level loading
+    const int warp_id = threadIdx.x / WARP_SIZE;
+    const int lane_id = threadIdx.x % WARP_SIZE;
+    
+    // Load key và nonce vào shared memory một cách hiệu quả
+    if (lane_id < 16) {
+        s_key[lane_id] = key[lane_id];
+        s_nonce[lane_id] = nonce[lane_id];
     }
-    __syncthreads();
+    __syncwarp();
+    
+    // Load associated data vào shared memory
+    if (lane_id < adlen) {
+        s_ad[lane_id] = associateddata[lane_id];
+    }
+    __syncwarp();
     
     // Mỗi thread xử lý một block dữ liệu
     uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -343,7 +369,7 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
         ascon_initialize_device(S, s_key, s_nonce, 12, 8, RATE, 16, 1);
         
         // Xử lý associated data
-        ascon_process_associated_data_device(S, associateddata, adlen, 8, RATE);
+        ascon_process_associated_data_device(S, s_ad, adlen, 8, RATE);
         
         // Tính số byte cần xử lý trong block này
         uint32_t bytes_to_process = (offset + block_size <= plaintext_length) ? 
@@ -487,7 +513,14 @@ void ascon_encrypt_gpu(uint8_t *ciphertext, const uint8_t *key, const uint8_t *n
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_nonce, 16));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
     
-    // Truyền dữ liệu theo batch
+    // Kiểm tra bộ nhớ
+    if (d_plaintext == NULL || d_ciphertext == NULL || d_key == NULL || 
+        d_nonce == NULL || d_associateddata == NULL) {
+        fprintf(stderr, "Lỗi: Không thể cấp phát bộ nhớ GPU\n");
+        return;
+    }
+    
+    // Truyền dữ liệu theo batch với kích thước tối ưu
     size_t batch_size = 1024 * 1024;  // 1MB mỗi lần
     for (size_t offset = 0; offset < plaintext_length; offset += batch_size) {
         size_t current_batch = min(batch_size, plaintext_length - offset);
@@ -639,9 +672,16 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     // Cấp phát một lần và tái sử dụng
     static uint8_t *h_plaintext = NULL;
     static uint8_t *h_ciphertext = NULL;
+    static uint8_t *h_key = NULL;
+    static uint8_t *h_nonce = NULL;
+    static uint8_t *h_ad = NULL;
+    
     if (h_plaintext == NULL) {
         CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_plaintext, MAX_BUFFER_SIZE));
         CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ciphertext, MAX_BUFFER_SIZE));
+        CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_key, 16));
+        CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_nonce, 16));
+        CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ad, adlen > 0 ? adlen : 1));
     }
     #else
     const uint8_t *h_key = key;
@@ -962,24 +1002,31 @@ int main() {
     CHECK_CUDA_ERROR(cudaGetDeviceProperties(&deviceProp, 0));
     printf("Sử dụng GPU: %s\n", deviceProp.name);
     
-    // Thiết lập cấu hình GPU
-    printf("Cấu hình: %d threads/block, %d streams, %s pinned memory\n", 
-          BLOCK_SIZE, STREAM_COUNT, USE_PINNED_MEMORY ? "có" : "không");
-    
-    // Thiết lập giới hạn shared memory
-    CHECK_CUDA_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128 * 1024 * 1024));
-    
-    // Thiết lập cache preference
-    CHECK_CUDA_ERROR(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
-    
-    // Chạy benchmark để so sánh hiệu suất
-    demo_ascon_gpu_pipelined();
-    
+    // Thiết lập cấu hình GPU tối ưu
     cudaDeviceProp prop;
     CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
     CHECK_CUDA_ERROR(cudaSetDevice(0));
+    
+    // Ưu tiên L1 cache cho shared memory
     CHECK_CUDA_ERROR(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+    
+    // Tăng giới hạn shared memory
     CHECK_CUDA_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 256 * 1024 * 1024));
+    
+    // Thiết lập stream priority
+    int priority_high, priority_low;
+    CHECK_CUDA_ERROR(cudaDeviceGetStreamPriorityRange(&priority_low, &priority_high));
+    
+    // Tạo streams với priority
+    cudaStream_t streams[STREAM_COUNT];
+    for (int i = 0; i < STREAM_COUNT; i++) {
+        CHECK_CUDA_ERROR(cudaStreamCreateWithPriority(&streams[i], 
+                                                    cudaStreamNonBlocking,
+                                                    (i == 0) ? priority_high : priority_low));
+    }
+    
+    // Chạy benchmark để so sánh hiệu suất
+    demo_ascon_gpu_pipelined();
     
     return 0;
 } 
