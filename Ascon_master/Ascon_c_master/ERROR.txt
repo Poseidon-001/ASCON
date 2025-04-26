@@ -1,0 +1,5 @@
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_c_master$ gcc -g -fstack-protector-all -o backup_ascon backup_ascon.c
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_c_master$ ./backup_ascon
+=== demo encryption using Ascon-AEAD128 ===
+*** stack smashing detected ***: terminated
+Aborted (core dumped)
