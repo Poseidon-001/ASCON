@@ -70,6 +70,37 @@ __device__ __host__ uint64_t rotr_device(uint64_t val, int r) {
     return (val >> r) | (val << (64 - r));
 }
 
+// Thêm hàm ascon_permutation_device
+__device__ void ascon_permutation_device(uint64_t *S, int rounds) {
+    for (int r = 12 - rounds; r < 12; r++) {
+        // --- add round constants ---
+        S[2] ^= (0xf0 - r * 0x10 + r * 0x1);
+
+        // --- substitution layer ---
+        S[0] ^= S[4];
+        S[4] ^= S[3];
+        S[2] ^= S[1];
+        uint64_t T[5];
+        for (int i = 0; i < 5; i++) {
+            T[i] = (S[i] ^ 0xFFFFFFFFFFFFFFFF) & S[(i + 1) % 5];
+        }
+        for (int i = 0; i < 5; i++) {
+            S[i] ^= T[(i + 1) % 5];
+        }
+        S[1] ^= S[0];
+        S[0] ^= S[4];
+        S[3] ^= S[2];
+        S[2] ^= 0xFFFFFFFFFFFFFFFF;
+
+        // --- linear diffusion layer ---
+        S[0] ^= rotr_device(S[0], 19) ^ rotr_device(S[0], 28);
+        S[1] ^= rotr_device(S[1], 61) ^ rotr_device(S[1], 39);
+        S[2] ^= rotr_device(S[2],  1) ^ rotr_device(S[2],  6);
+        S[3] ^= rotr_device(S[3], 10) ^ rotr_device(S[3], 17);
+        S[4] ^= rotr_device(S[4],  7) ^ rotr_device(S[4], 41);
+    }
+}
+
 // Main GPU functions
 __device__ void ascon_initialize_device(uint64_t *S, const uint8_t *key, const uint8_t *nonce, 
                                        int a, int b, int rate, int taglen, uint8_t version) {
