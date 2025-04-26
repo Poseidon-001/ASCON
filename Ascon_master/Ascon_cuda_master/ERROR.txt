@@ -15,3 +15,22 @@ ascon_1frame.cu(330): error: identifier "ascon_permutation_device" is undefined
 ascon_1frame.cu(413): error: identifier "ascon_permutation_device" is undefined
 
 7 errors detected in the compilation of "ascon_1frame.cu".
+
+
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
+ascon_1frame.cu(323): warning: result of call is not used
+
+ascon_1frame.cu(334): warning: variable "shared_S" was declared but never referenced
+
+ascon_1frame.cu(521): error: no instance of overloaded function "atomicExch" matches the argument list
+            argument types are: (uint8_t *, int)
+
+ascon_1frame.cu(824): error: transfer of control bypasses initialization of:
+            variable "is_correct"
+(837): here
+
+2 errors detected in the compilation of "ascon_1frame.cu".
+
+
+
+
