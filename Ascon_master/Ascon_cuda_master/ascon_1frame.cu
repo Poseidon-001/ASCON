@@ -1016,9 +1016,6 @@
         return (tag_verification == 0) ? 1 : 0;
     }
 
-    // Khai báo prototype cho hàm demo_ascon_cpu để có thể sử dụng trong demo_ascon_gpu
-    void demo_ascon_cpu();
-
     // Hàm demo được tối ưu hóa
     void demo_ascon_gpu() {
         printf("\n=== Bắt đầu demo Ascon trên GPU ===\n");
@@ -1043,8 +1040,6 @@
         err = cudaSetDeviceFlags(cudaDeviceScheduleYield | cudaDeviceMapHost);
         if (err != cudaSuccess) {
             printf("Lỗi thiết lập device flags: %s\n", cudaGetErrorString(err));
-            printf("Chuyển sang chế độ CPU...\n");
-            demo_ascon_cpu();
             return;
         }
         
@@ -1347,125 +1342,6 @@ cleanup:
         }
         
         printf("Demo hoàn tất.\n");
-    }
-
-    // Phiên bản CPU của Ascon demo
-    void demo_ascon_cpu() {
-        printf("\n=== Demo Ascon trên CPU ===\n");
-        
-        // Tạo key và nonce
-        uint8_t key[16], nonce[16];
-        uint8_t associateddata[] = "ASCON";
-        
-        // Tạo plaintext ngẫu nhiên
-        size_t plaintext_length = 1024; // 1KB
-        uint8_t *plaintext = (uint8_t *)malloc(plaintext_length);
-        if (!plaintext) {
-            printf("Lỗi: Không thể cấp phát bộ nhớ cho plaintext\n");
-            return;
-        }
-        
-        // Cấp phát bộ nhớ cho ciphertext và plaintext giải mã
-        uint8_t *ciphertext = (uint8_t *)malloc(plaintext_length + 16);
-        uint8_t *decrypted = (uint8_t *)malloc(plaintext_length);
-        if (!ciphertext || !decrypted) {
-            printf("Lỗi: Không thể cấp phát bộ nhớ\n");
-            free(plaintext);
-            if (ciphertext) free(ciphertext);
-            if (decrypted) free(decrypted);
-            return;
-        }
-        
-        // Tạo dữ liệu ngẫu nhiên
-        get_random_bytes(key, 16);
-        get_random_bytes(nonce, 16);
-        get_random_bytes(plaintext, plaintext_length);
-        
-        printf("Đã tạo %zu bytes dữ liệu test\n", plaintext_length);
-        
-        // Mã hóa và đo thời gian
-        clock_t start = clock();
-        
-        // Mã hóa (đơn giản hóa, không sử dụng CUDA)
-        // Loại bỏ biến S không sử dụng
-        
-        // Mã hóa đơn giản
-        printf("Mã hóa %zu bytes dữ liệu...\n", plaintext_length);
-        
-        // Giả lập mã hóa (thực tế sẽ dùng thuật toán Ascon hoàn chỉnh)
-        memcpy(ciphertext, plaintext, plaintext_length);
-        // Giả lập tạo tag
-        for (int i = 0; i < 16; i++) {
-            ciphertext[plaintext_length + i] = key[i] ^ nonce[i];
-        }
-        
-        clock_t end = clock();
-        double encryption_time = (double)(end - start) / CLOCKS_PER_SEC * 1000.0;
-        
-        // Giải mã và đo thời gian
-        start = clock();
-        
-        printf("Giải mã %zu bytes dữ liệu...\n", plaintext_length);
-        // Giả lập giải mã
-        memcpy(decrypted, ciphertext, plaintext_length);
-        
-        end = clock();
-        double decryption_time = (double)(end - start) / CLOCKS_PER_SEC * 1000.0;
-        
-        // Kiểm tra kết quả
-        int is_correct = 1;
-        for (size_t i = 0; i < plaintext_length; i++) {
-            if (plaintext[i] != decrypted[i]) {
-                is_correct = 0;
-                break;
-            }
-        }
-        
-        // In kết quả
-        printf("\n=== Kết quả (CPU) ===\n");
-        printf("Thời gian mã hóa: %.3f ms\n", encryption_time);
-        printf("Thời gian giải mã: %.3f ms\n", decryption_time);
-        printf("Tổng thời gian: %.3f ms\n", encryption_time + decryption_time);
-        printf("Kích thước dữ liệu: %zu bytes\n", plaintext_length);
-        printf("Tỉ lệ mã hóa: %.2f MB/s\n", 
-              (plaintext_length / (encryption_time / 1000.0)) / (1024.0 * 1024.0));
-        printf("Tỉ lệ giải mã: %.2f MB/s\n", 
-              (plaintext_length / (decryption_time / 1000.0)) / (1024.0 * 1024.0));
-        printf("Giải mã thành công: %s\n", is_correct ? "Có" : "Không");
-        
-        // Ghi kết quả ra file
-        FILE *output_file = fopen("ascon_cpu.txt", "w");
-        if (output_file) {
-            demo_print(output_file, "key", key, 16);
-            demo_print(output_file, "nonce", nonce, 16);
-            demo_print(output_file, "plaintext", plaintext, plaintext_length);
-            demo_print(output_file, "ass.data", associateddata, sizeof(associateddata) - 1);
-            demo_print(output_file, "ciphertext", ciphertext, plaintext_length);
-            demo_print(output_file, "tag", ciphertext + plaintext_length, 16);
-            demo_print(output_file, "decrypted", decrypted, plaintext_length);
-            
-            fprintf(output_file, "\n=== Performance Metrics (CPU) ===\n");
-            fprintf(output_file, "Encryption time: %.3f ms\n", encryption_time);
-            fprintf(output_file, "Decryption time: %.3f ms\n", decryption_time);
-            fprintf(output_file, "Total time: %.3f ms\n", encryption_time + decryption_time);
-            fprintf(output_file, "Data size: %zu bytes\n", plaintext_length);
-            fprintf(output_file, "Encryption throughput: %.2f MB/s\n", 
-                    (plaintext_length / (encryption_time / 1000.0)) / (1024.0 * 1024.0));
-            fprintf(output_file, "Decryption throughput: %.2f MB/s\n", 
-                    (plaintext_length / (decryption_time / 1000.0)) / (1024.0 * 1024.0));
-            fprintf(output_file, "Decryption successful: Yes\n");
-            fclose(output_file);
-            printf("Kết quả đã lưu vào ascon_cpu.txt\n");
-        } else {
-            printf("Lỗi: Không thể mở file đầu ra\n");
-        }
-        
-        // Giải phóng bộ nhớ
-        free(plaintext);
-        free(ciphertext);
-        free(decrypted);
-        
-        printf("Demo CPU hoàn thành.\n");
     }
 
     // Hàm main
