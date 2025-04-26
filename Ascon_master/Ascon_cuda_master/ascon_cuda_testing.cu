@@ -728,20 +728,11 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     }
     
     // Cấp phát bộ nhớ trên GPU
-    uint8_t *d_plaintext, *d_ciphertext, *d_key, *d_nonce, *d_associateddata;
-    uint8_t *d_tag_verification;
+    uint8_t *d_plaintext = NULL, *d_ciphertext = NULL, *d_key = NULL, *d_nonce = NULL, *d_associateddata = NULL;
+    uint8_t *d_tag_verification = NULL;
     uint8_t tag_verification = 0;
     
-    #if USE_PINNED_MEMORY
-    // Sử dụng page-locked memory cho toàn bộ dữ liệu
-    uint8_t *h_plaintext, *h_ciphertext;
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_plaintext, plaintext_length));
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ciphertext, plaintext_length + 16));
-    
-    // Sao chép dữ liệu vào pinned memory
-    memcpy(h_plaintext, plaintext, plaintext_length);
-    #endif
-    
+    // Cấp phát bộ nhớ trước khi sử dụng
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_plaintext, actual_length));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_ciphertext, ciphertext_length));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_key, 16));
@@ -749,23 +740,42 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_tag_verification, sizeof(uint8_t)));
     
-    // Sao chép key, nonce, và tag_verification
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, key, 16, cudaMemcpyHostToDevice, streams[0]));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, nonce, 16, cudaMemcpyHostToDevice, streams[0]));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_tag_verification, &tag_verification, sizeof(uint8_t), 
-                                  cudaMemcpyHostToDevice, streams[0]));
-    if (adlen > 0) {
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, associateddata, adlen, 
-                                      cudaMemcpyHostToDevice, streams[0]));
+    // Tính số block và thread
+    int num_blocks = (actual_length + RATE - 1) / RATE;
+    int thread_blocks = (num_blocks + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    
+    if (thread_blocks > MAX_GRID_SIZE) {
+        thread_blocks = MAX_GRID_SIZE;
     }
+    
+    #if USE_PINNED_MEMORY
+    // Sử dụng page-locked memory cho toàn bộ dữ liệu
+    uint8_t *h_plaintext = NULL, *h_ciphertext = NULL;
+    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_plaintext, actual_length));
+    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ciphertext, ciphertext_length));
+    
+    // Sao chép dữ liệu vào pinned memory
+    memcpy(h_plaintext, plaintext, actual_length);
+    memcpy(h_ciphertext, ciphertext, ciphertext_length);
+    #endif
     
     // Tạo các event để theo dõi
     cudaEvent_t computeDone, transferDone;
     CHECK_CUDA_ERROR(cudaEventCreate(&computeDone));
     CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
     
+    // Sao chép key, nonce, và tag_verification
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_key, (const void*)key, 16, cudaMemcpyHostToDevice, streams[0]));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_nonce, (const void*)nonce, 16, cudaMemcpyHostToDevice, streams[0]));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_tag_verification, (const void*)&tag_verification, sizeof(uint8_t), 
+                                  cudaMemcpyHostToDevice, streams[0]));
+    if (adlen > 0) {
+        CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_associateddata, (const void*)associateddata, adlen, 
+                                      cudaMemcpyHostToDevice, streams[0]));
+    }
+    
     // Bắt đầu truyền dữ liệu
-    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_plaintext, (const void*)plaintext, plaintext_length, 
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_ciphertext, (const void*)ciphertext, ciphertext_length, 
                                    cudaMemcpyHostToDevice, streams[0]));
     
     // Đánh dấu khi truyền xong
@@ -775,10 +785,10 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[1], transferDone, 0));
     
     // Bắt đầu tính toán
-    ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[1]>>>(
+    ascon_decrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[1]>>>(
         d_plaintext, d_ciphertext, 
         d_key, d_nonce, d_associateddata, 
-        adlen, plaintext_length);
+        adlen, ciphertext_length, d_tag_verification);
     
     // Đánh dấu khi tính toán xong
     CHECK_CUDA_ERROR(cudaEventRecord(computeDone, streams[1]));
@@ -787,8 +797,13 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[0], computeDone, 0));
     
     // Truyền kết quả về
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(ciphertext, d_ciphertext, plaintext_length + 16,
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)plaintext, (const void*)d_plaintext, actual_length,
                                    cudaMemcpyDeviceToHost, streams[0]));
+    
+    // Đợi tất cả các streams hoàn thành
+    for (int i = 0; i < num_streams; i++) {
+        CHECK_CUDA_ERROR(cudaStreamSynchronize(streams[i]));
+    }
     
     // Giải phóng bộ nhớ
     CHECK_CUDA_ERROR(cudaFree(d_plaintext));
@@ -804,10 +819,12 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaFreeHost(h_ciphertext));
     #endif
     
-    // Hủy các streams
+    // Hủy các streams và events
     for (int i = 0; i < num_streams; i++) {
         CHECK_CUDA_ERROR(cudaStreamDestroy(streams[i]));
     }
+    CHECK_CUDA_ERROR(cudaEventDestroy(computeDone));
+    CHECK_CUDA_ERROR(cudaEventDestroy(transferDone));
     
     // Trả về 1 nếu xác thực thành công, 0 nếu thất bại
     return (tag_verification == 0) ? 1 : 0;
