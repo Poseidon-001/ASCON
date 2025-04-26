@@ -7,7 +7,7 @@
 #include <cuda_runtime.h>
 
 // Cấu hình CUDA
-#define BLOCK_SIZE 512          // Số thread trong một block
+#define BLOCK_SIZE 1024          // Số thread trong một block
 #define MAX_GRID_SIZE 65535     // Số block tối đa trong một grid
 #define WARP_SIZE 32            // Kích thước warp
 #define RATE 8                  // Rate của Ascon
@@ -315,6 +315,7 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
     // Sử dụng shared memory cho key và nonce
     __shared__ uint8_t s_key[16];
     __shared__ uint8_t s_nonce[16];
+    __shared__ uint8_t s_ad[256];  // Thêm shared memory cho associated data
     
     // Load key và nonce vào shared memory
     if (threadIdx.x < 16) {
@@ -486,8 +487,18 @@ void ascon_encrypt_gpu(uint8_t *ciphertext, const uint8_t *key, const uint8_t *n
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_nonce, 16));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
     
+    // Truyền dữ liệu theo batch
+    size_t batch_size = 1024 * 1024;  // 1MB mỗi lần
+    for (size_t offset = 0; offset < plaintext_length; offset += batch_size) {
+        size_t current_batch = min(batch_size, plaintext_length - offset);
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext + offset, 
+                                       plaintext + offset,
+                                       current_batch,
+                                       cudaMemcpyHostToDevice,
+                                       streams[0]));
+    }
+    
     // Sao chép dữ liệu từ CPU sang GPU
-    CHECK_CUDA_ERROR(cudaMemcpy(d_plaintext, plaintext, plaintext_length, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_key, key, 16, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_nonce, nonce, 16, cudaMemcpyHostToDevice));
     if (adlen > 0) {
@@ -625,16 +636,12 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     
     // Sử dụng pinned memory
     #if USE_PINNED_MEMORY
-    uint8_t *h_key = NULL, *h_nonce = NULL, *h_ad = NULL;
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_key, 16));
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_nonce, 16));
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ad, adlen > 0 ? adlen : 1));
-    
-    // Sao chép dữ liệu vào pinned memory
-    memcpy(h_key, key, 16);
-    memcpy(h_nonce, nonce, 16);
-    if (adlen > 0) {
-        memcpy(h_ad, associateddata, adlen);
+    // Cấp phát một lần và tái sử dụng
+    static uint8_t *h_plaintext = NULL;
+    static uint8_t *h_ciphertext = NULL;
+    if (h_plaintext == NULL) {
+        CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_plaintext, MAX_BUFFER_SIZE));
+        CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ciphertext, MAX_BUFFER_SIZE));
     }
     #else
     const uint8_t *h_key = key;
@@ -693,9 +700,9 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     CHECK_CUDA_ERROR(cudaFree(d_associateddata));
     
     #if USE_PINNED_MEMORY
-    CHECK_CUDA_ERROR(cudaFreeHost(h_key));
-    CHECK_CUDA_ERROR(cudaFreeHost(h_nonce));
-    CHECK_CUDA_ERROR(cudaFreeHost(h_ad));
+    // Giải phóng pinned memory
+    CHECK_CUDA_ERROR(cudaFreeHost(h_plaintext));
+    CHECK_CUDA_ERROR(cudaFreeHost(h_ciphertext));
     #endif
     
     // Hủy các streams và events
@@ -967,6 +974,12 @@ int main() {
     
     // Chạy benchmark để so sánh hiệu suất
     demo_ascon_gpu_pipelined();
+    
+    cudaDeviceProp prop;
+    CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
+    CHECK_CUDA_ERROR(cudaSetDevice(0));
+    CHECK_CUDA_ERROR(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+    CHECK_CUDA_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 256 * 1024 * 1024));
     
     return 0;
 } 
