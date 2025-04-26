@@ -7,7 +7,7 @@
 #include <cuda_runtime.h>
 
 // Cấu hình CUDA
-#define BLOCK_SIZE 256          // Số thread trong một block
+#define BLOCK_SIZE 512          // Số thread trong một block
 #define MAX_GRID_SIZE 65535     // Số block tối đa trong một grid
 #define WARP_SIZE 32            // Kích thước warp
 #define RATE 8                  // Rate của Ascon
@@ -312,6 +312,16 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
                                     const uint8_t *key, const uint8_t *nonce,
                                     const uint8_t *associateddata, uint32_t adlen,
                                     uint32_t plaintext_length) {
+    // Sử dụng shared memory cho key và nonce
+    __shared__ uint8_t s_key[16];
+    __shared__ uint8_t s_nonce[16];
+    
+    // Load key và nonce vào shared memory
+    if (threadIdx.x < 16) {
+        s_key[threadIdx.x] = key[threadIdx.x];
+        s_nonce[threadIdx.x] = nonce[threadIdx.x];
+    }
+    __syncthreads();
     
     // Mỗi thread xử lý một block dữ liệu
     uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -329,7 +339,7 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
         uint64_t S[5] = {0};
         
         // Khởi tạo state với IV + key + nonce
-        ascon_initialize_device(S, key, nonce, 12, 8, RATE, 16, 1);
+        ascon_initialize_device(S, s_key, s_nonce, 12, 8, RATE, 16, 1);
         
         // Xử lý associated data
         ascon_process_associated_data_device(S, associateddata, adlen, 8, RATE);
@@ -365,7 +375,7 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
         else {
             // Block cuối, tạo tag
             uint8_t tag[16];
-            ascon_finalize_device(S, tag, key, 12, 16);
+            ascon_finalize_device(S, tag, s_key, 12, 16);
             
             // Ghi tag vào cuối ciphertext
             for (int i = 0; i < 16; i++) {
@@ -628,50 +638,36 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
         CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, h_ad, adlen, cudaMemcpyHostToDevice, streams[0]));
     }
     
-    // Tính toán chunk size cho từng stream
-    size_t chunk_size = (plaintext_length + num_streams - 1) / num_streams;
-    // Đảm bảo chunk_size là bội số của RATE để tránh chia cắt các block
-    chunk_size = ((chunk_size + RATE - 1) / RATE) * RATE;
+    // Tạo các event để theo dõi
+    cudaEvent_t computeDone, transferDone;
+    CHECK_CUDA_ERROR(cudaEventCreate(&computeDone));
+    CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
     
-    // Cấp phát bộ nhớ cho từng chunk
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_plaintext, plaintext_length));
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_ciphertext, plaintext_length + 16)); // +16 cho tag
+    // Bắt đầu truyền dữ liệu
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext, plaintext, plaintext_length, 
+                                   cudaMemcpyHostToDevice, streams[0]));
     
-    // Xử lý từng chunk trong các streams khác nhau
-    for (size_t offset = 0; offset < plaintext_length; offset += chunk_size) {
-        int stream_idx = (offset / chunk_size) % num_streams;
-        
-        // Tính kích thước thực tế của chunk hiện tại
-        size_t current_chunk_size = (offset + chunk_size <= plaintext_length) ? 
-                                  chunk_size : (plaintext_length - offset);
-        
-        // Sao chép chunk plaintext vào GPU
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext + offset, plaintext + offset, 
-                                       current_chunk_size, cudaMemcpyHostToDevice, 
-                                       streams[stream_idx]));
-        
-        // Tính số thread blocks cần thiết cho chunk này
-        int num_blocks = (current_chunk_size + RATE - 1) / RATE;
-        int thread_blocks = (num_blocks + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        
-        if (thread_blocks > MAX_GRID_SIZE) {
-            thread_blocks = MAX_GRID_SIZE;
-        }
-        
-        // Chạy kernel trên stream tương ứng
-        ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[stream_idx]>>>(
-            d_plaintext + offset, d_ciphertext + offset, 
-            d_key, d_nonce, d_associateddata, 
-            adlen, current_chunk_size);
-    }
+    // Đánh dấu khi truyền xong
+    CHECK_CUDA_ERROR(cudaEventRecord(transferDone, streams[0]));
     
-    // Đợi tất cả các streams hoàn thành
-    for (int i = 0; i < num_streams; i++) {
-        CHECK_CUDA_ERROR(cudaStreamSynchronize(streams[i]));
-    }
+    // Đợi truyền xong trước khi tính toán
+    CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[1], transferDone, 0));
     
-    // Sao chép kết quả từ GPU về CPU
-    CHECK_CUDA_ERROR(cudaMemcpy(ciphertext, d_ciphertext, plaintext_length + 16, cudaMemcpyDeviceToHost));
+    // Bắt đầu tính toán
+    ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[1]>>>(
+        d_plaintext, d_ciphertext, 
+        d_key, d_nonce, d_associateddata, 
+        adlen, plaintext_length);
+    
+    // Đánh dấu khi tính toán xong
+    CHECK_CUDA_ERROR(cudaEventRecord(computeDone, streams[1]));
+    
+    // Đợi tính toán xong trước khi truyền kết quả về
+    CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[0], computeDone, 0));
+    
+    // Truyền kết quả về
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(ciphertext, d_ciphertext, plaintext_length + 16,
+                                   cudaMemcpyDeviceToHost, streams[0]));
     
     // Giải phóng bộ nhớ
     CHECK_CUDA_ERROR(cudaFree(d_plaintext));
@@ -719,21 +715,13 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     uint8_t tag_verification = 0;
     
     #if USE_PINNED_MEMORY
-    uint8_t *h_key, *h_nonce, *h_ad;
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_key, 16));
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_nonce, 16));
-    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ad, adlen > 0 ? adlen : 1));
+    // Sử dụng page-locked memory cho toàn bộ dữ liệu
+    uint8_t *h_plaintext, *h_ciphertext;
+    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_plaintext, plaintext_length));
+    CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ciphertext, plaintext_length + 16));
     
     // Sao chép dữ liệu vào pinned memory
-    memcpy(h_key, key, 16);
-    memcpy(h_nonce, nonce, 16);
-    if (adlen > 0) {
-        memcpy(h_ad, associateddata, adlen);
-    }
-    #else
-    const uint8_t *h_key = key;
-    const uint8_t *h_nonce = nonce;
-    const uint8_t *h_ad = associateddata;
+    memcpy(h_plaintext, plaintext, plaintext_length);
     #endif
     
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_plaintext, actual_length));
@@ -744,59 +732,45 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_tag_verification, sizeof(uint8_t)));
     
     // Sao chép key, nonce, và tag_verification
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, h_key, 16, cudaMemcpyHostToDevice, streams[0]));
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, h_nonce, 16, cudaMemcpyHostToDevice, streams[0]));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, key, 16, cudaMemcpyHostToDevice, streams[0]));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, nonce, 16, cudaMemcpyHostToDevice, streams[0]));
     CHECK_CUDA_ERROR(cudaMemcpyAsync(d_tag_verification, &tag_verification, sizeof(uint8_t), 
                                   cudaMemcpyHostToDevice, streams[0]));
     if (adlen > 0) {
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, h_ad, adlen, 
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, associateddata, adlen, 
                                       cudaMemcpyHostToDevice, streams[0]));
     }
     
-    // Tính toán chunk size cho từng stream
-    size_t chunk_size = (actual_length + num_streams - 1) / num_streams;
-    // Đảm bảo chunk_size là bội số của RATE
-    chunk_size = ((chunk_size + RATE - 1) / RATE) * RATE;
+    // Tạo các event để theo dõi
+    cudaEvent_t computeDone, transferDone;
+    CHECK_CUDA_ERROR(cudaEventCreate(&computeDone));
+    CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
     
-    // Sao chép toàn bộ ciphertext (bao gồm cả tag) một lần
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_ciphertext, ciphertext, ciphertext_length, 
-                                  cudaMemcpyHostToDevice, streams[0]));
+    // Bắt đầu truyền dữ liệu
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext, plaintext, plaintext_length, 
+                                   cudaMemcpyHostToDevice, streams[0]));
     
-    // Đợi việc sao chép hoàn tất trước khi chạy kernels
-    CHECK_CUDA_ERROR(cudaStreamSynchronize(streams[0]));
+    // Đánh dấu khi truyền xong
+    CHECK_CUDA_ERROR(cudaEventRecord(transferDone, streams[0]));
     
-    // Xử lý từng chunk trong các streams khác nhau
-    for (size_t offset = 0; offset < actual_length; offset += chunk_size) {
-        int stream_idx = (offset / chunk_size) % num_streams;
-        
-        // Tính kích thước thực tế của chunk hiện tại
-        size_t current_chunk_size = (offset + chunk_size <= actual_length) ? 
-                                  chunk_size : (actual_length - offset);
-        
-        // Tính số thread blocks cần thiết cho chunk này
-        int num_blocks = (current_chunk_size + RATE - 1) / RATE;
-        int thread_blocks = (num_blocks + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        
-        if (thread_blocks > MAX_GRID_SIZE) {
-            thread_blocks = MAX_GRID_SIZE;
-        }
-        
-        // Chạy kernel trên stream tương ứng
-        ascon_decrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[stream_idx]>>>(
-            d_plaintext + offset, d_ciphertext, 
-            d_key, d_nonce, d_associateddata, 
-            adlen, ciphertext_length, d_tag_verification);
-    }
+    // Đợi truyền xong trước khi tính toán
+    CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[1], transferDone, 0));
     
-    // Đợi tất cả các streams hoàn thành
-    for (int i = 0; i < num_streams; i++) {
-        CHECK_CUDA_ERROR(cudaStreamSynchronize(streams[i]));
-    }
+    // Bắt đầu tính toán
+    ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[1]>>>(
+        d_plaintext, d_ciphertext, 
+        d_key, d_nonce, d_associateddata, 
+        adlen, plaintext_length);
     
-    // Sao chép plaintext kết quả từ GPU về CPU
-    CHECK_CUDA_ERROR(cudaMemcpy(plaintext, d_plaintext, actual_length, cudaMemcpyDeviceToHost));
-    CHECK_CUDA_ERROR(cudaMemcpy(&tag_verification, d_tag_verification, sizeof(uint8_t), 
-                             cudaMemcpyDeviceToHost));
+    // Đánh dấu khi tính toán xong
+    CHECK_CUDA_ERROR(cudaEventRecord(computeDone, streams[1]));
+    
+    // Đợi tính toán xong trước khi truyền kết quả về
+    CHECK_CUDA_ERROR(cudaStreamWaitEvent(streams[0], computeDone, 0));
+    
+    // Truyền kết quả về
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(ciphertext, d_ciphertext, plaintext_length + 16,
+                                   cudaMemcpyDeviceToHost, streams[0]));
     
     // Giải phóng bộ nhớ
     CHECK_CUDA_ERROR(cudaFree(d_plaintext));
@@ -807,9 +781,9 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaFree(d_tag_verification));
     
     #if USE_PINNED_MEMORY
-    CHECK_CUDA_ERROR(cudaFreeHost(h_key));
-    CHECK_CUDA_ERROR(cudaFreeHost(h_nonce));
-    CHECK_CUDA_ERROR(cudaFreeHost(h_ad));
+    // Giải phóng pinned memory
+    CHECK_CUDA_ERROR(cudaFreeHost(h_plaintext));
+    CHECK_CUDA_ERROR(cudaFreeHost(h_ciphertext));
     #endif
     
     // Hủy các streams
@@ -949,6 +923,12 @@ int main() {
     // Thiết lập cấu hình GPU
     printf("Cấu hình: %d threads/block, %d streams, %s pinned memory\n", 
           BLOCK_SIZE, STREAM_COUNT, USE_PINNED_MEMORY ? "có" : "không");
+    
+    // Thiết lập giới hạn shared memory
+    CHECK_CUDA_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128 * 1024 * 1024));
+    
+    // Thiết lập cache preference
+    CHECK_CUDA_ERROR(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
     
     // Chạy benchmark để so sánh hiệu suất
     demo_ascon_gpu_pipelined();
