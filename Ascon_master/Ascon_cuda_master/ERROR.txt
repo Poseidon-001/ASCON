@@ -1,1 +1,17 @@
 ERROR LIST :
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc ascon_1frame.cu -o ascon_1frame
+ascon_1frame.cu(96): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(119): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(150): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(178): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(189): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(330): error: identifier "ascon_permutation_device" is undefined
+
+ascon_1frame.cu(413): error: identifier "ascon_permutation_device" is undefined
+
+7 errors detected in the compilation of "ascon_1frame.cu".
