@@ -320,7 +320,7 @@
             exit(EXIT_FAILURE);
         }
 
-        fread(*plaintext, 1, *length, file);
+        (void)fread(*plaintext, 1, *length, file);
         fclose(file);
     } 
 
@@ -816,6 +816,7 @@
         
         // Ghi kết quả
         FILE *output_file = fopen("ascon_optimized_gpu.txt", "w");
+        int is_correct = 1;
         if (!output_file) {
             printf("Lỗi: Không thể mở file đầu ra\n");
             goto cleanup;
@@ -831,7 +832,7 @@
         demo_print(output_file, "decrypted", decrypted, plaintext_length);
         
         // Kiểm tra xem giải mã có đúng không
-        int is_correct = 1;
+        is_correct = 1;
         if (decrypt_success) {
             for (size_t i = 0; i < plaintext_length; i++) {
                 if (plaintext[i] != decrypted[i]) {
