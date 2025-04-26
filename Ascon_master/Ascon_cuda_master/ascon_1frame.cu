@@ -1023,8 +1023,24 @@
     void demo_ascon_gpu() {
         printf("\n=== Bắt đầu demo Ascon trên GPU ===\n");
         
+        // Khai báo tất cả biến ở đầu hàm
+        cudaError_t err;
+        uint8_t key[16], nonce[16];
+        uint8_t associateddata[] = "ASCON";
+        uint8_t *plaintext = NULL;
+        size_t plaintext_length = 0;
+        uint8_t *ciphertext = NULL;
+        uint8_t *decrypted = NULL;
+        cudaEvent_t start, stop;
+        int num_iterations = 10;
+        float encryption_time = 0;
+        int decrypt_success = 1;
+        float decryption_time = 0;
+        FILE *output_file = NULL;
+        int is_correct = 1;
+        
         // Đặt thiết bị CUDA vào chế độ tối ưu hiệu suất
-        cudaError_t err = cudaSetDeviceFlags(cudaDeviceScheduleYield | cudaDeviceMapHost);
+        err = cudaSetDeviceFlags(cudaDeviceScheduleYield | cudaDeviceMapHost);
         if (err != cudaSuccess) {
             printf("Lỗi thiết lập device flags: %s\n", cudaGetErrorString(err));
             printf("Chuyển sang chế độ CPU...\n");
@@ -1038,11 +1054,6 @@
             printf("Lỗi thiết lập cache config: %s\n", cudaGetErrorString(err));
             printf("Tiếp tục mà không điều chỉnh cache...\n");
         }
-        
-        uint8_t key[16], nonce[16];
-        uint8_t associateddata[] = "ASCON";
-        uint8_t *plaintext;
-        size_t plaintext_length;
         
         // Tạo key và nonce ngẫu nhiên
         get_random_bytes(key, 16);
@@ -1113,8 +1124,6 @@
         }
         
         // Sử dụng pinned memory cho các bộ đệm để tăng tốc chuyển dữ liệu
-        uint8_t *ciphertext, *decrypted;
-        
         printf("Cấp phát bộ nhớ cho ciphertext và decrypted...\n");
         
         if (USE_PINNED_MEMORY) {
@@ -1159,7 +1168,6 @@
         }
         
         // Đo thời gian mã hóa
-        cudaEvent_t start, stop;
         err = cudaEventCreate(&start);
         if (err != cudaSuccess) {
             printf("Lỗi tạo event start: %s\n", cudaGetErrorString(err));
@@ -1176,7 +1184,7 @@
         // Khởi động GPU (warm-up)
         printf("Warm-up GPU...\n");
         ascon_encrypt_gpu(ciphertext, key, nonce, associateddata, 
-                         sizeof(associateddata) - 1, plaintext, plaintext_length);
+                        sizeof(associateddata) - 1, plaintext, plaintext_length);
         
         // Đo thời gian mã hóa thực tế
         printf("Bắt đầu đo thời gian mã hóa (10 lần)...\n");
@@ -1189,7 +1197,6 @@
         }
         
         // Thực hiện 10 lần và lấy trung bình để có kết quả đo lường ổn định hơn
-        int num_iterations = 10;
         for (int i = 0; i < num_iterations; i++) {
             ascon_encrypt_gpu(ciphertext, key, nonce, associateddata, 
                             sizeof(associateddata) - 1, plaintext, plaintext_length);
@@ -1211,7 +1218,6 @@
             goto cleanup;
         }
         
-        float encryption_time = 0;
         err = cudaEventElapsedTime(&encryption_time, start, stop);
         if (err != cudaSuccess) {
             printf("Lỗi lấy thời gian: %s\n", cudaGetErrorString(err));
@@ -1232,10 +1238,10 @@
         }
         
         // Thực hiện 10 lần và lấy trung bình
-        int decrypt_success = 1;
+        decrypt_success = 1;
         for (int i = 0; i < num_iterations; i++) {
             decrypt_success &= ascon_decrypt_gpu(decrypted, key, nonce, associateddata, 
-                                              sizeof(associateddata) - 1, ciphertext, plaintext_length + 16);
+                                            sizeof(associateddata) - 1, ciphertext, plaintext_length + 16);
         }
         
         err = cudaEventRecord(stop);
@@ -1254,7 +1260,6 @@
             goto cleanup;
         }
         
-        float decryption_time = 0;
         err = cudaEventElapsedTime(&decryption_time, start, stop);
         if (err != cudaSuccess) {
             printf("Lỗi lấy thời gian (giải mã): %s\n", cudaGetErrorString(err));
@@ -1271,14 +1276,14 @@
         printf("Tổng thời gian: %.3f ms\n", encryption_time + decryption_time);
         printf("Kích thước dữ liệu: %zu bytes\n", plaintext_length);
         printf("Throughput mã hóa: %.2f MB/s\n", 
-              (plaintext_length / (encryption_time / 1000.0)) / (1024.0 * 1024.0));
+                (plaintext_length / (encryption_time / 1000.0)) / (1024.0 * 1024.0));
         printf("Throughput giải mã: %.2f MB/s\n", 
-              (plaintext_length / (decryption_time / 1000.0)) / (1024.0 * 1024.0));
+                (plaintext_length / (decryption_time / 1000.0)) / (1024.0 * 1024.0));
         printf("Giải mã thành công: %s\n", decrypt_success ? "Có" : "Không");
         
         // Ghi kết quả
-        FILE *output_file = fopen("ascon_optimized_gpu.txt", "w");
-        int is_correct = 1;
+        output_file = fopen("ascon_optimized_gpu.txt", "w");
+        is_correct = 1;
         if (!output_file) {
             printf("Lỗi: Không thể mở file đầu ra\n");
             goto cleanup_events;
@@ -1294,7 +1299,6 @@
         demo_print(output_file, "decrypted", decrypted, plaintext_length);
         
         // Kiểm tra xem giải mã có đúng không
-        is_correct = 1;
         if (decrypt_success) {
             for (size_t i = 0; i < plaintext_length; i++) {
                 if (plaintext[i] != decrypted[i]) {
@@ -1383,7 +1387,7 @@ cleanup:
         clock_t start = clock();
         
         // Mã hóa (đơn giản hóa, không sử dụng CUDA)
-        uint64_t S[5] = {0};
+        // Loại bỏ biến S không sử dụng
         
         // Mã hóa đơn giản
         printf("Mã hóa %zu bytes dữ liệu...\n", plaintext_length);
