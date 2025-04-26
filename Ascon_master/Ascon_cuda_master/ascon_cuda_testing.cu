@@ -529,10 +529,10 @@ void ascon_encrypt_gpu(uint8_t *ciphertext, const uint8_t *key, const uint8_t *n
     }
     
     // Sao chép dữ liệu từ CPU sang GPU
-    CHECK_CUDA_ERROR(cudaMemcpy(d_key, key, 16, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_nonce, nonce, 16, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, key, 16, cudaMemcpyHostToDevice, streams[0]));
+    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, nonce, 16, cudaMemcpyHostToDevice, streams[0]));
     if (adlen > 0) {
-        CHECK_CUDA_ERROR(cudaMemcpy(d_associateddata, associateddata, adlen, cudaMemcpyHostToDevice));
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, associateddata, adlen, cudaMemcpyHostToDevice, streams[0]));
     }
     
     // Tính số block và thread
@@ -544,9 +544,9 @@ void ascon_encrypt_gpu(uint8_t *ciphertext, const uint8_t *key, const uint8_t *n
     }
     
     // Chạy kernel
-    ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE>>>(d_plaintext, d_ciphertext, 
-                                                      d_key, d_nonce, d_associateddata, 
-                                                      adlen, plaintext_length);
+    ascon_encrypt_kernel<<<thread_blocks, BLOCK_SIZE, 0, streams[1]>>>(d_plaintext, d_ciphertext,
+                                                                      d_key, d_nonce, d_associateddata,
+                                                                      adlen, plaintext_length);
     
     // Chờ kernel hoàn thành
     cudaDeviceSynchronize();
