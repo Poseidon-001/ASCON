@@ -1,20 +1,17 @@
-COMPILE CODE : 
-nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
+ascon_cuda_testing.cu(647): warning: variable "d_plaintext" is used before its value is set
 
-ERROR LIST :
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc ascon_cuda_backup.cu -o ascon_cuda_backup
-ascon_cuda_backup.cu(96): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(657): error: identifier "thread_blocks" is undefined
 
-ascon_cuda_backup.cu(119): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(658): warning: variable "d_ciphertext" is used before its value is set
 
-ascon_cuda_backup.cu(150): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(720): error: identifier "plaintext_length" is undefined
 
-ascon_cuda_backup.cu(178): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(721): error: identifier "plaintext_length" is undefined
 
-ascon_cuda_backup.cu(189): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(724): error: identifier "plaintext_length" is undefined
 
-ascon_cuda_backup.cu(330): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(760): error: identifier "thread_blocks" is undefined
 
-ascon_cuda_backup.cu(413): error: identifier "ascon_permutation_device" is undefined
+ascon_cuda_testing.cu(772): error: argument of type "const uint8_t *" is incompatible with parameter of type "void *"
 
-7 errors detected in the compilation of "ascon_cuda_backup.cu".
+6 errors detected in the compilation of "ascon_cuda_testing.cu".
