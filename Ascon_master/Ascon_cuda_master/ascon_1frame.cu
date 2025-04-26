@@ -5,7 +5,7 @@
     #include <string.h>
     #include <assert.h>
     #include <cuda_runtime.h>
-    //compile : nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
+
     // Cấu hình CUDA tối ưu cho Jetson Xavier AGX
     #define BLOCK_SIZE 128          // Số thread trong một block - giảm xuống để phù hợp với L1 cache
     #define MAX_GRID_SIZE 65535     // Số block tối đa trong một grid
@@ -330,9 +330,6 @@
                                         const uint8_t *associateddata, uint32_t adlen,
                                         uint32_t plaintext_length) {
         
-        // Sử dụng shared memory cho state nếu được cấu hình
-        __shared__ uint64_t shared_S[BLOCK_SIZE * 5];
-        
         // Mỗi thread xử lý một block dữ liệu
         uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
         uint32_t total_threads = gridDim.x * blockDim.x;
@@ -518,7 +515,7 @@
                 #pragma unroll
                 for (int i = 0; i < 16; i++) {
                     if (computed_tag[i] != expected_tag[i]) {
-                        atomicExch(tag_verification, 1); // Tag không khớp
+                        *tag_verification = 1; // Tag không khớp
                         break;
                     }
                 }
@@ -835,11 +832,15 @@
         
         // Kiểm tra xem giải mã có đúng không
         int is_correct = 1;
-        for (size_t i = 0; i < plaintext_length; i++) {
-            if (plaintext[i] != decrypted[i]) {
-                is_correct = 0;
-                break;
+        if (decrypt_success) {
+            for (size_t i = 0; i < plaintext_length; i++) {
+                if (plaintext[i] != decrypted[i]) {
+                    is_correct = 0;
+                    break;
+                }
             }
+        } else {
+            is_correct = 0;
         }
         
         // Ghi thông tin hiệu suất
