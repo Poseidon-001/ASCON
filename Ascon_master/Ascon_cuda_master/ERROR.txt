@@ -1,3 +1,6 @@
+COMPILE CODE : 
+nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
+
 ERROR LIST :
 phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc ascon_1frame.cu -o ascon_1frame
 ascon_1frame.cu(96): error: identifier "ascon_permutation_device" is undefined
