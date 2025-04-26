@@ -276,19 +276,3 @@ ascon_1frame.cu(1131): error: transfer of control bypasses initialization of:
 ascon_1frame.cu(1254): warning: variable "S" was declared but never referenced
 
 21 errors detected in the compilation of "ascon_1frame.cu".
-
-
-ascon_1frame.cu(821): error: transfer of control bypasses initialization of:
-            variable "is_correct"
-(834): here
-
-1 error detected in the compilation of "ascon_1frame.cu".
-
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
-ascon_1frame.cu(323): warning: result of call is not used
-
-ascon_1frame.cu(323): warning: result of call is not used
-
-^Cnvcc error   : 'cicc' died due to signal 2 
-
-
