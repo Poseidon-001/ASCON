@@ -331,10 +331,8 @@ __global__ void ascon_encrypt_kernel(const uint8_t *plaintext, uint8_t *cipherte
     __shared__ uint8_t s_key[16];
     __shared__ uint8_t s_nonce[16];
     __shared__ uint8_t s_ad[256];
-    __shared__ uint8_t s_block[16];
     
     // Tối ưu warp-level loading
-    const int warp_id = threadIdx.x / WARP_SIZE;
     const int lane_id = threadIdx.x % WARP_SIZE;
     
     // Load key và nonce vào shared memory một cách hiệu quả
@@ -524,11 +522,10 @@ void ascon_encrypt_gpu(uint8_t *ciphertext, const uint8_t *key, const uint8_t *n
     size_t batch_size = 1024 * 1024;  // 1MB mỗi lần
     for (size_t offset = 0; offset < plaintext_length; offset += batch_size) {
         size_t current_batch = min(batch_size, plaintext_length - offset);
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext + offset, 
-                                       plaintext + offset,
-                                       current_batch,
-                                       cudaMemcpyHostToDevice,
-                                       streams[0]));
+        CHECK_CUDA_ERROR(cudaMemcpy(d_plaintext + offset, 
+                                  plaintext + offset,
+                                  current_batch,
+                                  cudaMemcpyHostToDevice));
     }
     
     // Sao chép dữ liệu từ CPU sang GPU
