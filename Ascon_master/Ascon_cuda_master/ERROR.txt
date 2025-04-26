@@ -43,5 +43,11 @@ ascon_1frame.cu(821): error: transfer of control bypasses initialization of:
 
 1 error detected in the compilation of "ascon_1frame.cu".
 
+phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_cuda_master$ nvcc -O3 -arch=sm_72 --use_fast_math --ptxas-options=-v ascon_1frame.cu -o ascon_1frame_optimized
+ascon_1frame.cu(323): warning: result of call is not used
+
+ascon_1frame.cu(323): warning: result of call is not used
+
+^Cnvcc error   : 'cicc' died due to signal 2 
 
 
