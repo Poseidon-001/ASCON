@@ -606,11 +606,26 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     }
     
     // Cấp phát bộ nhớ trên GPU
-    uint8_t *d_plaintext, *d_ciphertext, *d_key, *d_nonce, *d_associateddata;
+    uint8_t *d_plaintext = NULL, *d_ciphertext = NULL, *d_key = NULL, *d_nonce = NULL, *d_associateddata = NULL;
     
-    // Sử dụng pinned memory để truyền dữ liệu nhanh hơn
+    // Cấp phát bộ nhớ trước khi sử dụng
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_plaintext, plaintext_length));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_ciphertext, plaintext_length + 16));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_key, 16));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_nonce, 16));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
+    
+    // Tính số block và thread
+    int num_blocks = (plaintext_length + RATE - 1) / RATE;
+    int thread_blocks = (num_blocks + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    
+    if (thread_blocks > MAX_GRID_SIZE) {
+        thread_blocks = MAX_GRID_SIZE;
+    }
+    
+    // Sử dụng pinned memory
     #if USE_PINNED_MEMORY
-    uint8_t *h_key, *h_nonce, *h_ad;
+    uint8_t *h_key = NULL, *h_nonce = NULL, *h_ad = NULL;
     CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_key, 16));
     CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_nonce, 16));
     CHECK_CUDA_ERROR(cudaMallocHost((void**)&h_ad, adlen > 0 ? adlen : 1));
@@ -627,24 +642,20 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     const uint8_t *h_ad = associateddata;
     #endif
     
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_key, 16));
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_nonce, 16));
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
+    // Tạo các event để theo dõi
+    cudaEvent_t computeDone, transferDone;
+    CHECK_CUDA_ERROR(cudaEventCreate(&computeDone));
+    CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
     
-    // Sao chép key, nonce và associateddata (data nhỏ) một lần
+    // Sao chép key, nonce và associateddata
     CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, h_key, 16, cudaMemcpyHostToDevice, streams[0]));
     CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, h_nonce, 16, cudaMemcpyHostToDevice, streams[0]));
     if (adlen > 0) {
         CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, h_ad, adlen, cudaMemcpyHostToDevice, streams[0]));
     }
     
-    // Tạo các event để theo dõi
-    cudaEvent_t computeDone, transferDone;
-    CHECK_CUDA_ERROR(cudaEventCreate(&computeDone));
-    CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
-    
     // Bắt đầu truyền dữ liệu
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext, plaintext, plaintext_length, 
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_plaintext, (const void*)plaintext, plaintext_length, 
                                    cudaMemcpyHostToDevice, streams[0]));
     
     // Đánh dấu khi truyền xong
@@ -669,6 +680,11 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     CHECK_CUDA_ERROR(cudaMemcpyAsync(ciphertext, d_ciphertext, plaintext_length + 16,
                                    cudaMemcpyDeviceToHost, streams[0]));
     
+    // Đợi tất cả các streams hoàn thành
+    for (int i = 0; i < num_streams; i++) {
+        CHECK_CUDA_ERROR(cudaStreamSynchronize(streams[i]));
+    }
+    
     // Giải phóng bộ nhớ
     CHECK_CUDA_ERROR(cudaFree(d_plaintext));
     CHECK_CUDA_ERROR(cudaFree(d_ciphertext));
@@ -682,10 +698,12 @@ void ascon_encrypt_gpu_pipelined(uint8_t *ciphertext, const uint8_t *key, const 
     CHECK_CUDA_ERROR(cudaFreeHost(h_ad));
     #endif
     
-    // Hủy các streams
+    // Hủy các streams và events
     for (int i = 0; i < num_streams; i++) {
         CHECK_CUDA_ERROR(cudaStreamDestroy(streams[i]));
     }
+    CHECK_CUDA_ERROR(cudaEventDestroy(computeDone));
+    CHECK_CUDA_ERROR(cudaEventDestroy(transferDone));
 }
 
 // Tương tự cho hàm decrypt
@@ -747,7 +765,7 @@ int ascon_decrypt_gpu_pipelined(uint8_t *plaintext, const uint8_t *key, const ui
     CHECK_CUDA_ERROR(cudaEventCreate(&transferDone));
     
     // Bắt đầu truyền dữ liệu
-    CHECK_CUDA_ERROR(cudaMemcpyAsync(d_plaintext, plaintext, plaintext_length, 
+    CHECK_CUDA_ERROR(cudaMemcpyAsync((void*)d_plaintext, (const void*)plaintext, plaintext_length, 
                                    cudaMemcpyHostToDevice, streams[0]));
     
     // Đánh dấu khi truyền xong
