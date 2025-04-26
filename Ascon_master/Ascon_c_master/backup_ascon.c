@@ -289,7 +289,6 @@ void ascon_encrypt(uint8_t *ciphertext, const uint8_t *key, const uint8_t *nonce
     iv[7] = 0;
     memcpy(iv + 8, key, 16);
     memcpy(iv + 24, nonce, 16);
-    zero_bytes(iv + 40, 16);
 
     uint64_t S[5];
     bytes_to_state(S, iv);
@@ -409,7 +408,6 @@ void ascon_decrypt(uint8_t *plaintext, const uint8_t *key, const uint8_t *nonce,
     iv[7] = 0;
     memcpy(iv + 8, key, 16);
     memcpy(iv + 24, nonce, 16);
-    zero_bytes(iv + 40, 16);
 
     uint64_t S[5];
     bytes_to_state(S, iv);
@@ -524,7 +522,6 @@ void ascon_initialize(uint64_t *S, const uint8_t *key, const uint8_t *nonce, int
     iv[7] = 0;
     memcpy(iv + 8, key, 16);
     memcpy(iv + 24, nonce, 16);
-    zero_bytes(iv + 40, 16);
 
     bytes_to_state(S, iv);
     if (debug) printstate(S, "initial value:");
@@ -675,22 +672,44 @@ void demo_aead(const char *variant) {
     uint8_t nonce[16];
     uint8_t associateddata[] = "ASCON";
     uint8_t plaintext[] = "ascon";
-    uint8_t ciphertext[sizeof(plaintext) + 16];
-    uint8_t receivedplaintext[sizeof(plaintext)];
+    
+    // Calculate proper sizes
+    size_t adlen = sizeof(associateddata) - 1;  // -1 to exclude null terminator
+    size_t ptlen = sizeof(plaintext) - 1;  // -1 to exclude null terminator
+    size_t ctlen = ptlen + 16;  // 16 bytes for the tag
+    
+    // Dynamically allocate proper size buffers
+    uint8_t *ciphertext = (uint8_t *)malloc(ctlen);
+    if (ciphertext == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return;
+    }
+    
+    uint8_t *receivedplaintext = (uint8_t *)malloc(ptlen + 1);  // +1 for null terminator if needed
+    if (receivedplaintext == NULL) {
+        free(ciphertext);
+        fprintf(stderr, "Memory allocation failed\n");
+        return;
+    }
+    memset(receivedplaintext, 0, ptlen + 1);  // Initialize with zeros
 
     get_random_bytes(key, 16);
     get_random_bytes(nonce, 16);
 
-    ascon_encrypt(ciphertext, key, nonce, associateddata, sizeof(associateddata) - 1, plaintext, sizeof(plaintext) - 1, variant);
-    ascon_decrypt(receivedplaintext, key, nonce, associateddata, sizeof(associateddata) - 1, ciphertext, sizeof(ciphertext), variant);
+    ascon_encrypt(ciphertext, key, nonce, associateddata, adlen, plaintext, ptlen, variant);
+    ascon_decrypt(receivedplaintext, key, nonce, associateddata, adlen, ciphertext, ctlen, variant);
 
     demo_print("key", key, 16);
     demo_print("nonce", nonce, 16);
-    demo_print("plaintext", plaintext, sizeof(plaintext) - 1);
-    demo_print("ass.data", associateddata, sizeof(associateddata) - 1);
-    demo_print("ciphertext", ciphertext, sizeof(plaintext) - 1);
-    demo_print("tag", ciphertext + sizeof(ciphertext) - 16, 16);
-    demo_print("received", receivedplaintext, sizeof(receivedplaintext) - 1);
+    demo_print("plaintext", plaintext, ptlen);
+    demo_print("ass.data", associateddata, adlen);
+    demo_print("ciphertext", ciphertext, ptlen);
+    demo_print("tag", ciphertext + ptlen, 16);
+    demo_print("received", receivedplaintext, ptlen);
+    
+    // Clean up
+    free(ciphertext);
+    free(receivedplaintext);
 }
 
 // void demo_hash(const char *variant, size_t hashlength) {
