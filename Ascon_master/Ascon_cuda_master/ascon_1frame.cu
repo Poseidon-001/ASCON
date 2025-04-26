@@ -537,6 +537,23 @@
         
         printf("Bắt đầu mã hóa GPU với %zu bytes dữ liệu\n", plaintext_length);
         
+        // Biến sử dụng trong toàn bộ hàm
+        cudaError_t err;
+        uint8_t *d_plaintext = NULL;
+        uint8_t *d_ciphertext = NULL;
+        uint8_t *d_key = NULL;
+        uint8_t *d_nonce = NULL;
+        uint8_t *d_associateddata = NULL;
+        size_t ad_size = 0;
+        cudaStream_t streams[STREAM_COUNT];
+        int stream_count = 0;
+        int num_blocks = 0;
+        int optimal_threads_per_block = 0;
+        int warps_per_block = 0;
+        int optimal_blocks_per_sm = 0;
+        int optimal_blocks = 0;
+        int thread_blocks = 0;
+        
         // Giới hạn kích thước dữ liệu để tránh tràn bộ nhớ hoặc kernel timeout
         size_t max_size = 1024 * 1024; // 1MB
         if (plaintext_length > max_size) {
@@ -544,15 +561,9 @@
             plaintext_length = max_size;
         }
         
-        // Cấp phát bộ nhớ trên GPU
-        uint8_t *d_plaintext, *d_ciphertext, *d_key, *d_nonce, *d_associateddata;
-        
-        printf("Cấp phát bộ nhớ GPU...\n");
-        
         // Sử dụng pinned memory để đẩy nhanh chuyển dữ liệu
         if (USE_PINNED_MEMORY) {
             printf("Đang sử dụng pinned memory...\n");
-            cudaError_t err;
             err = cudaHostRegister((void*)plaintext, plaintext_length, cudaHostRegisterDefault);
             if (err != cudaSuccess) {
                 printf("Lỗi cudaHostRegister plaintext: %s\n", cudaGetErrorString(err));
@@ -587,7 +598,7 @@
         }
         
         // Cấp phát bộ nhớ với căn chỉnh cho truy cập dữ liệu tối ưu
-        cudaError_t err;
+        printf("Cấp phát bộ nhớ GPU...\n");
         
         err = cudaMalloc((void**)&d_plaintext, plaintext_length);
         if (err != cudaSuccess) {
@@ -619,7 +630,7 @@
             goto cleanup_host;
         }
         
-        size_t ad_size = adlen > 0 ? adlen : 1;
+        ad_size = adlen > 0 ? adlen : 1;
         err = cudaMalloc((void**)&d_associateddata, ad_size);
         if (err != cudaSuccess) {
             printf("Lỗi cudaMalloc d_associateddata: %s\n", cudaGetErrorString(err));
@@ -633,12 +644,11 @@
         printf("Đã cấp phát xong bộ nhớ GPU\n");
         
         // Sử dụng streams để chạy song song
-        cudaStream_t streams[STREAM_COUNT];
-        for (int i = 0; i < STREAM_COUNT; i++) {
-            err = cudaStreamCreate(&streams[i]);
+        for (stream_count = 0; stream_count < STREAM_COUNT; stream_count++) {
+            err = cudaStreamCreate(&streams[stream_count]);
             if (err != cudaSuccess) {
-                printf("Lỗi tạo stream %d: %s\n", i, cudaGetErrorString(err));
-                for (int j = 0; j < i; j++) {
+                printf("Lỗi tạo stream %d: %s\n", stream_count, cudaGetErrorString(err));
+                for (int j = 0; j < stream_count; j++) {
                     cudaStreamDestroy(streams[j]);
                 }
                 goto cleanup_device;
@@ -683,18 +693,18 @@
         }
         
         // Tính số block và thread tối ưu cho Jetson Xavier AGX
-        int num_blocks = (plaintext_length + RATE - 1) / RATE;
+        num_blocks = (plaintext_length + RATE - 1) / RATE;
         
         // Tính toán số lượng block, threads tối ưu dựa trên số lượng SM
-        int optimal_threads_per_block = BLOCK_SIZE;
+        optimal_threads_per_block = BLOCK_SIZE;
         
         // Số lượng blocks tối ưu để đạt được occupancy 100%
-        int warps_per_block = (optimal_threads_per_block + WARP_SIZE - 1) / WARP_SIZE;
-        int optimal_blocks_per_sm = WARPS_PER_SM / warps_per_block;
-        int optimal_blocks = SMX_COUNT * optimal_blocks_per_sm;
+        warps_per_block = (optimal_threads_per_block + WARP_SIZE - 1) / WARP_SIZE;
+        optimal_blocks_per_sm = WARPS_PER_SM / warps_per_block;
+        optimal_blocks = SMX_COUNT * optimal_blocks_per_sm;
         
         // Đảm bảo số block đủ để xử lý tất cả dữ liệu
-        int thread_blocks = (num_blocks + optimal_threads_per_block - 1) / optimal_threads_per_block;
+        thread_blocks = (num_blocks + optimal_threads_per_block - 1) / optimal_threads_per_block;
         thread_blocks = min(thread_blocks, optimal_blocks);
         
         if (thread_blocks > MAX_GRID_SIZE) {
@@ -745,17 +755,17 @@
         
     cleanup_streams:
         // Hủy streams
-        for (int i = 0; i < STREAM_COUNT; i++) {
+        for (int i = 0; i < stream_count; i++) {
             cudaStreamDestroy(streams[i]);
         }
         
     cleanup_device:
         // Giải phóng bộ nhớ trên device
-        cudaFree(d_plaintext);
-        cudaFree(d_ciphertext);
-        cudaFree(d_key);
-        cudaFree(d_nonce);
-        cudaFree(d_associateddata);
+        if (d_plaintext) cudaFree(d_plaintext);
+        if (d_ciphertext) cudaFree(d_ciphertext);
+        if (d_key) cudaFree(d_key);
+        if (d_nonce) cudaFree(d_nonce);
+        if (d_associateddata) cudaFree(d_associateddata);
         
     cleanup_host:
         // Giải phóng pinned memory
@@ -777,7 +787,11 @@
         printf("Bắt đầu giải mã GPU với %zu bytes dữ liệu\n", ciphertext_length - 16);
         
         // Biến sử dụng trong toàn bộ hàm
-        uint8_t *d_ciphertext = NULL, *d_decrypted = NULL, *d_key = NULL, *d_nonce = NULL, *d_associateddata = NULL;
+        uint8_t *d_ciphertext = NULL;
+        uint8_t *d_decrypted = NULL;
+        uint8_t *d_key = NULL;
+        uint8_t *d_nonce = NULL;
+        uint8_t *d_associateddata = NULL;
         uint8_t *d_tag_verification = NULL;
         uint8_t tag_verification = 0;
         cudaError_t err;
