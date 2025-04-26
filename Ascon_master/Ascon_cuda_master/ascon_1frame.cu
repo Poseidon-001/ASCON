@@ -769,115 +769,233 @@
         }
     }
 
-    // Tối ưu hàm giải mã trên GPU
-    int ascon_decrypt_gpu(uint8_t *plaintext, const uint8_t *key, const uint8_t *nonce,
+    // Hàm giải mã trên GPU tối ưu
+    int ascon_decrypt_gpu(uint8_t *decrypted, const uint8_t *key, const uint8_t *nonce,
                          const uint8_t *associateddata, size_t adlen,
                          const uint8_t *ciphertext, size_t ciphertext_length) {
         
+        printf("Bắt đầu giải mã GPU với %zu bytes dữ liệu\n", ciphertext_length - 16);
+        
+        // Biến sử dụng trong toàn bộ hàm
+        uint8_t *d_ciphertext = NULL, *d_decrypted = NULL, *d_key = NULL, *d_nonce = NULL, *d_associateddata = NULL;
+        uint8_t *d_tag_verification = NULL;
+        uint8_t tag_verification = 0;
+        cudaError_t err;
+        cudaStream_t streams[STREAM_COUNT];
+        int stream_count = 0;
+        int num_blocks = 0;
+        int optimal_threads_per_block = 0;
+        int warps_per_block = 0;
+        int optimal_blocks_per_sm = 0;
+        int optimal_blocks = 0;
+        int thread_blocks = 0;
+        size_t ad_size = 0;
+        size_t plaintext_length = ciphertext_length - 16;
+        
+        // Giới hạn kích thước dữ liệu để tránh tràn bộ nhớ hoặc kernel timeout
+        size_t max_size = 1024 * 1024; // 1MB + 16 bytes tag
+        if (ciphertext_length > max_size) {
+            printf("Cảnh báo: Dữ liệu quá lớn, giới hạn xuống %zu bytes\n", max_size);
+            ciphertext_length = max_size;
+            plaintext_length = ciphertext_length - 16;
+        }
+        
+        // Kiểm tra điều kiện đầu vào
         if (ciphertext_length < 16) {
             fprintf(stderr, "Lỗi: Ciphertext phải chứa ít nhất 16 bytes cho tag\n");
             return 0;
         }
         
-        size_t actual_length = ciphertext_length - 16; // Trừ đi độ dài tag
-        
-        // Sử dụng pinned memory
+        // Sử dụng pinned memory để tăng tốc truyền dữ liệu
         if (USE_PINNED_MEMORY) {
-            CHECK_CUDA_ERROR(cudaHostRegister((void*)ciphertext, ciphertext_length, cudaHostRegisterDefault));
-            CHECK_CUDA_ERROR(cudaHostRegister((void*)key, 16, cudaHostRegisterDefault));
-            CHECK_CUDA_ERROR(cudaHostRegister((void*)nonce, 16, cudaHostRegisterDefault));
-            if (adlen > 0) {
-                CHECK_CUDA_ERROR(cudaHostRegister((void*)associateddata, adlen, cudaHostRegisterDefault));
+            err = cudaHostRegister((void*)ciphertext, ciphertext_length, cudaHostRegisterDefault);
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Lỗi pinned memory cho ciphertext: %s\n", cudaGetErrorString(err));
+            }
+            
+            err = cudaHostRegister((void*)key, 16, cudaHostRegisterDefault);
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Lỗi pinned memory cho key: %s\n", cudaGetErrorString(err));
+            }
+            
+            err = cudaHostRegister((void*)nonce, 16, cudaHostRegisterDefault);
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Lỗi pinned memory cho nonce: %s\n", cudaGetErrorString(err));
+            }
+            
+            if (adlen > 0 && associateddata != NULL) {
+                err = cudaHostRegister((void*)associateddata, adlen, cudaHostRegisterDefault);
+                if (err != cudaSuccess) {
+                    fprintf(stderr, "Lỗi pinned memory cho AD: %s\n", cudaGetErrorString(err));
+                }
             }
         }
         
         // Cấp phát bộ nhớ trên GPU
-        uint8_t *d_plaintext, *d_ciphertext, *d_key, *d_nonce, *d_associateddata, *d_tag_verification;
-        uint8_t tag_verification = 0;
+        err = cudaMalloc((void**)&d_decrypted, plaintext_length);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_decrypted: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_plaintext, actual_length));
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_ciphertext, ciphertext_length));
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_key, 16));
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_nonce, 16));
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_associateddata, adlen > 0 ? adlen : 1));
-        CHECK_CUDA_ERROR(cudaMalloc((void**)&d_tag_verification, sizeof(uint8_t)));
+        err = cudaMalloc((void**)&d_ciphertext, ciphertext_length);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_ciphertext: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
-        // Sử dụng streams
-        cudaStream_t streams[STREAM_COUNT];
-        for (int i = 0; i < STREAM_COUNT; i++) {
-            CHECK_CUDA_ERROR(cudaStreamCreate(&streams[i]));
+        err = cudaMalloc((void**)&d_key, 16);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_key: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        err = cudaMalloc((void**)&d_nonce, 16);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_nonce: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        ad_size = (adlen > 0) ? adlen : 1;
+        err = cudaMalloc((void**)&d_associateddata, ad_size);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_associateddata: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        err = cudaMalloc((void**)&d_tag_verification, sizeof(uint8_t));
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấp phát bộ nhớ cho d_tag_verification: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        // Khởi tạo streams
+        for (stream_count = 0; stream_count < STREAM_COUNT; stream_count++) {
+            err = cudaStreamCreate(&streams[stream_count]);
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Lỗi tạo stream %d: %s\n", stream_count, cudaGetErrorString(err));
+                goto cleanup;
+            }
         }
         
         // Sao chép dữ liệu từ CPU sang GPU với streams
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_ciphertext, ciphertext, ciphertext_length, cudaMemcpyHostToDevice, streams[0]));
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_key, key, 16, cudaMemcpyHostToDevice, streams[1]));
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_nonce, nonce, 16, cudaMemcpyHostToDevice, streams[2]));
-        CHECK_CUDA_ERROR(cudaMemcpyAsync(d_tag_verification, &tag_verification, sizeof(uint8_t), cudaMemcpyHostToDevice, streams[3]));
-        
-        if (adlen > 0) {
-            CHECK_CUDA_ERROR(cudaMemcpyAsync(d_associateddata, associateddata, adlen, cudaMemcpyHostToDevice, streams[0]));
+        err = cudaMemcpyAsync(d_ciphertext, ciphertext, ciphertext_length, cudaMemcpyHostToDevice, streams[0]);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép ciphertext sang GPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
         }
         
-        // Đồng bộ hóa
-        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+        err = cudaMemcpyAsync(d_key, key, 16, cudaMemcpyHostToDevice, streams[1 % STREAM_COUNT]);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép key sang GPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        err = cudaMemcpyAsync(d_nonce, nonce, 16, cudaMemcpyHostToDevice, streams[2 % STREAM_COUNT]);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép nonce sang GPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        err = cudaMemcpyAsync(d_tag_verification, &tag_verification, sizeof(uint8_t), cudaMemcpyHostToDevice, streams[3 % STREAM_COUNT]);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép tag_verification sang GPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+        if (adlen > 0 && associateddata != NULL) {
+            err = cudaMemcpyAsync(d_associateddata, associateddata, adlen, cudaMemcpyHostToDevice, streams[0]);
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Lỗi sao chép associated data sang GPU: %s\n", cudaGetErrorString(err));
+                goto cleanup;
+            }
+        }
+        
+        // Đồng bộ hóa để đảm bảo dữ liệu đã được sao chép sang GPU
+        err = cudaDeviceSynchronize();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi đồng bộ hóa sau sao chép: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
         // Tính toán cấu hình kernel tối ưu
-        int num_blocks = (actual_length + RATE - 1) / RATE;
+        num_blocks = (plaintext_length + RATE - 1) / RATE;
+        optimal_threads_per_block = BLOCK_SIZE;
         
         // Tính toán số lượng block, threads tối ưu
-        int optimal_threads_per_block = BLOCK_SIZE;
-        
-        // Số lượng blocks tối ưu
-        int warps_per_block = (optimal_threads_per_block + WARP_SIZE - 1) / WARP_SIZE;
-        int optimal_blocks_per_sm = WARPS_PER_SM / warps_per_block;
-        int optimal_blocks = SMX_COUNT * optimal_blocks_per_sm;
+        warps_per_block = (optimal_threads_per_block + WARP_SIZE - 1) / WARP_SIZE;
+        optimal_blocks_per_sm = WARPS_PER_SM / warps_per_block;
+        optimal_blocks = SMX_COUNT * optimal_blocks_per_sm;
         
         // Đảm bảo số block đủ để xử lý tất cả dữ liệu
-        int thread_blocks = (num_blocks + optimal_threads_per_block - 1) / optimal_threads_per_block;
+        thread_blocks = (num_blocks + optimal_threads_per_block - 1) / optimal_threads_per_block;
         thread_blocks = min(thread_blocks, optimal_blocks);
         
         if (thread_blocks > MAX_GRID_SIZE) {
             thread_blocks = MAX_GRID_SIZE;
         }
         
+        printf("Cấu hình giải mã GPU: %d blocks, %d threads/block\n", thread_blocks, optimal_threads_per_block);
+        
         // Cấu hình L1 cache và shared memory
-        CHECK_CUDA_ERROR(cudaFuncSetCacheConfig(ascon_decrypt_kernel, cudaFuncCachePreferShared));
+        err = cudaFuncSetCacheConfig(ascon_decrypt_kernel, cudaFuncCachePreferShared);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi cấu hình cache: %s\n", cudaGetErrorString(err));
+        }
         
         // Chạy kernel
         ascon_decrypt_kernel<<<thread_blocks, optimal_threads_per_block, 0, streams[0]>>>(
-            d_plaintext, d_ciphertext, d_key, d_nonce, d_associateddata, adlen, ciphertext_length, d_tag_verification);
+            d_decrypted, d_ciphertext, d_key, d_nonce, d_associateddata, adlen, ciphertext_length, d_tag_verification);
+        
+        // Kiểm tra lỗi sau khi chạy kernel
+        err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sau khi chạy kernel giải mã: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
         // Chờ kernel hoàn thành
-        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-        
-        // Kiểm tra lỗi
-        CHECK_CUDA_ERROR(cudaGetLastError());
+        err = cudaDeviceSynchronize();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi đồng bộ hóa sau kernel: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
         // Sao chép kết quả từ GPU về CPU
-        CHECK_CUDA_ERROR(cudaMemcpy(plaintext, d_plaintext, actual_length, cudaMemcpyDeviceToHost));
-        CHECK_CUDA_ERROR(cudaMemcpy(&tag_verification, d_tag_verification, sizeof(uint8_t), cudaMemcpyDeviceToHost));
+        err = cudaMemcpy(decrypted, d_decrypted, plaintext_length, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép kết quả từ GPU về CPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
         
-        // Giải phóng bộ nhớ
-        CHECK_CUDA_ERROR(cudaFree(d_plaintext));
-        CHECK_CUDA_ERROR(cudaFree(d_ciphertext));
-        CHECK_CUDA_ERROR(cudaFree(d_key));
-        CHECK_CUDA_ERROR(cudaFree(d_nonce));
-        CHECK_CUDA_ERROR(cudaFree(d_associateddata));
-        CHECK_CUDA_ERROR(cudaFree(d_tag_verification));
+        err = cudaMemcpy(&tag_verification, d_tag_verification, sizeof(uint8_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "Lỗi sao chép tag_verification từ GPU về CPU: %s\n", cudaGetErrorString(err));
+            goto cleanup;
+        }
+        
+    cleanup:
+        // Giải phóng bộ nhớ trên GPU
+        if (d_decrypted) cudaFree(d_decrypted);
+        if (d_ciphertext) cudaFree(d_ciphertext);
+        if (d_key) cudaFree(d_key);
+        if (d_nonce) cudaFree(d_nonce);
+        if (d_associateddata) cudaFree(d_associateddata);
+        if (d_tag_verification) cudaFree(d_tag_verification);
         
         // Giải phóng pinned memory
         if (USE_PINNED_MEMORY) {
-            CHECK_CUDA_ERROR(cudaHostUnregister((void*)ciphertext));
-            CHECK_CUDA_ERROR(cudaHostUnregister((void*)key));
-            CHECK_CUDA_ERROR(cudaHostUnregister((void*)nonce));
-            if (adlen > 0) {
-                CHECK_CUDA_ERROR(cudaHostUnregister((void*)associateddata));
+            cudaHostUnregister((void*)ciphertext);
+            cudaHostUnregister((void*)key);
+            cudaHostUnregister((void*)nonce);
+            if (adlen > 0 && associateddata != NULL) {
+                cudaHostUnregister((void*)associateddata);
             }
         }
         
         // Hủy streams
-        for (int i = 0; i < STREAM_COUNT; i++) {
-            CHECK_CUDA_ERROR(cudaStreamDestroy(streams[i]));
+        for (int i = 0; i < stream_count; i++) {
+            cudaStreamDestroy(streams[i]);
         }
         
         // Trả về 1 nếu xác thực thành công, 0 nếu thất bại
