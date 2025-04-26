@@ -320,7 +320,14 @@
             exit(EXIT_FAILURE);
         }
 
-        (void)fread(*plaintext, 1, *length, file);
+        size_t bytes_read = fread(*plaintext, 1, *length, file);
+        if (bytes_read != *length) {
+            perror("Failed to read the entire file");
+            free(*plaintext);
+            fclose(file);
+            exit(EXIT_FAILURE);
+        }
+        
         fclose(file);
     } 
 
