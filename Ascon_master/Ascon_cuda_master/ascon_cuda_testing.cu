@@ -14,7 +14,7 @@
 
 // Debug flags
 #define debug 0
-#define STREAM_COUNT 4          // Số stream CUDA để chạy song song
+#define STREAM_COUNT 2          // Số stream CUDA để chạy song song
 #define USE_SHARED_MEMORY 1     // Sử dụng shared memory 
 #define USE_PINNED_MEMORY 1     // Sử dụng pinned memory
 
