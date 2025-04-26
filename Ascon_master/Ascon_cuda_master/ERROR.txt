@@ -1,11 +1,7 @@
-ascon_cuda_testing.cu(738): error: identifier "plaintext_length" is undefined
+ascon_cuda_testing.cu(334): warning: variable "s_block" was declared but never referenced
 
-ascon_cuda_testing.cu(739): error: identifier "plaintext_length" is undefined
+ascon_cuda_testing.cu(337): warning: variable "warp_id" was declared but never referenced
 
-ascon_cuda_testing.cu(742): error: identifier "plaintext_length" is undefined
+ascon_cuda_testing.cu(527): error: identifier "streams" is undefined
 
-ascon_cuda_testing.cu(778): error: identifier "thread_blocks" is undefined
-
-ascon_cuda_testing.cu(790): error: argument of type "const uint8_t *" is incompatible with parameter of type "void *"
-
-5 errors detected in the compilation of "ascon_cuda_testing.cu".
+1 error detected in the compilation of "ascon_cuda_testing.cu".
