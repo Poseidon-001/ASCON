@@ -1,1 +1,9 @@
-CUDA error in ascon_cuda_testing.cu:741: invalid argument
+ascon_cuda_testing.cu(532): error: identifier "streams" is undefined
+
+ascon_cuda_testing.cu(533): error: identifier "streams" is undefined
+
+ascon_cuda_testing.cu(535): error: identifier "streams" is undefined
+
+ascon_cuda_testing.cu(547): error: identifier "streams" is undefined
+
+4 errors detected in the compilation of "ascon_cuda_testing.cu".
