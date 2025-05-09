@@ -1,5 +1,0 @@
-cuda24_2.cu(409): error: "err" has already been declared in the current scope
-phapdn@ubuntu:~/ASCON/Ascon_master/Ascon_c_master$ ./ascon1
-=== demo encryption using Ascon-AEAD128 ===
-*** stack smashing detected ***: terminated
-Aborted (core dumped)
