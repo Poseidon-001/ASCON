@@ -447,63 +447,8 @@ void ascon_decrypt_gpu_optimized(uint8_t *plaintext, const uint8_t *key, const u
     CHECK_CUDA_ERROR(cudaFree(d_associateddata));
 }
 
-// Update demo function to use optimized encryption
-void demo_ascon_gpu_optimized() {
-    uint8_t key[16], nonce[16];
-    uint8_t associateddata[] = "ASCON";
-    uint8_t *plaintext;
-    size_t plaintext_length;
-
-    // Generate random key and nonce
-    get_random_bytes(key, 16);
-    get_random_bytes(nonce, 16);
-
-    // Read plaintext from file
-    read_plaintext_from_file("frame_0.txt", &plaintext, &plaintext_length);
-
-    // Allocate memory for ciphertext
-    uint8_t *ciphertext = (uint8_t *)malloc(plaintext_length + 16);
-
-    // Measure encryption time
-    cudaEvent_t start, stop;
-    CHECK_CUDA_ERROR(cudaEventCreate(&start));
-    CHECK_CUDA_ERROR(cudaEventCreate(&stop));
-
-    CHECK_CUDA_ERROR(cudaEventRecord(start));
-    ascon_encrypt_gpu_optimized(ciphertext, key, nonce, associateddata, 
-                                sizeof(associateddata) - 1, plaintext, plaintext_length);
-    CHECK_CUDA_ERROR(cudaEventRecord(stop));
-    CHECK_CUDA_ERROR(cudaEventSynchronize(stop));
-
-    float encryption_time = 0;
-    CHECK_CUDA_ERROR(cudaEventElapsedTime(&encryption_time, start, stop));
-
-    // Write results to file
-    FILE *output_file = fopen("ascon_full_gpu_optimized.txt", "w");
-    if (!output_file) {
-        printf("Error: Unable to open output file\n");
-        free(plaintext);
-        free(ciphertext);
-        exit(EXIT_FAILURE);
-    }
-
-    demo_print(output_file, "key", key, 16);
-    demo_print(output_file, "nonce", nonce, 16);
-    demo_print(output_file, "plaintext", plaintext, plaintext_length);
-    demo_print(output_file, "ciphertext", ciphertext, plaintext_length);
-    fprintf(output_file, "Encryption time on GPU (optimized): %.3f ms\n", encryption_time);
-
-    fclose(output_file);
-    free(plaintext);
-    free(ciphertext);
-    CHECK_CUDA_ERROR(cudaEventDestroy(start));
-    CHECK_CUDA_ERROR(cudaEventDestroy(stop));
-
-    printf("Optimized GPU encryption completed in %.3f ms\n", encryption_time);
-}
-
-// Update demo function to use optimized decryption
-void demo_ascon_gpu_decrypt_optimized() {
+// Update demo function to include timing and verification
+void demo_ascon_gpu_encrypt_decrypt() {
     uint8_t key[16], nonce[16];
     uint8_t associateddata[] = "ASCON";
     uint8_t *plaintext, *decrypted_plaintext;
@@ -520,16 +465,35 @@ void demo_ascon_gpu_decrypt_optimized() {
     uint8_t *ciphertext = (uint8_t *)malloc(plaintext_length + 16);
     decrypted_plaintext = (uint8_t *)malloc(plaintext_length);
 
-    // Encrypt plaintext
+    // Measure encryption time
+    cudaEvent_t start, stop;
+    CHECK_CUDA_ERROR(cudaEventCreate(&start));
+    CHECK_CUDA_ERROR(cudaEventCreate(&stop));
+
+    CHECK_CUDA_ERROR(cudaEventRecord(start));
     ascon_encrypt_gpu_optimized(ciphertext, key, nonce, associateddata, 
                                 sizeof(associateddata) - 1, plaintext, plaintext_length);
+    CHECK_CUDA_ERROR(cudaEventRecord(stop));
+    CHECK_CUDA_ERROR(cudaEventSynchronize(stop));
 
-    // Decrypt ciphertext
+    float encryption_time = 0;
+    CHECK_CUDA_ERROR(cudaEventElapsedTime(&encryption_time, start, stop));
+
+    // Measure decryption time
+    CHECK_CUDA_ERROR(cudaEventRecord(start));
     ascon_decrypt_gpu_optimized(decrypted_plaintext, key, nonce, associateddata, 
                                 sizeof(associateddata) - 1, ciphertext, plaintext_length + 16);
+    CHECK_CUDA_ERROR(cudaEventRecord(stop));
+    CHECK_CUDA_ERROR(cudaEventSynchronize(stop));
+
+    float decryption_time = 0;
+    CHECK_CUDA_ERROR(cudaEventElapsedTime(&decryption_time, start, stop));
+
+    // Verify decryption success
+    bool decryption_success = (memcmp(plaintext, decrypted_plaintext, plaintext_length) == 0);
 
     // Write results to file
-    FILE *output_file = fopen("ascon_decrypt_gpu_optimized.txt", "w");
+    FILE *output_file = fopen("ascon_encrypt_decrypt_results.txt", "w");
     if (!output_file) {
         printf("Error: Unable to open output file\n");
         free(plaintext);
@@ -543,16 +507,27 @@ void demo_ascon_gpu_decrypt_optimized() {
     demo_print(output_file, "plaintext", plaintext, plaintext_length);
     demo_print(output_file, "ciphertext", ciphertext, plaintext_length + 16);
     demo_print(output_file, "decrypted plaintext", decrypted_plaintext, plaintext_length);
+    fprintf(output_file, "Encryption time on GPU: %.3f ms\n", encryption_time);
+    fprintf(output_file, "Decryption time on GPU: %.3f ms\n", decryption_time);
+    fprintf(output_file, "Total time on GPU: %.3f ms\n", encryption_time + decryption_time);
+    fprintf(output_file, "Decryption success: %s\n", decryption_success ? "Yes" : "No");
 
     fclose(output_file);
+
+    // Free memory
     free(plaintext);
     free(ciphertext);
     free(decrypted_plaintext);
+    CHECK_CUDA_ERROR(cudaEventDestroy(start));
+    CHECK_CUDA_ERROR(cudaEventDestroy(stop));
 
-    printf("Optimized GPU decryption completed.\n");
+    printf("Encryption time: %.3f ms\n", encryption_time);
+    printf("Decryption time: %.3f ms\n", decryption_time);
+    printf("Total time: %.3f ms\n", encryption_time + decryption_time);
+    printf("Decryption success: %s\n", decryption_success ? "Yes" : "No");
 }
 
-// Update main function to call both encryption and decryption demos
+// Update main function to call the new demo
 int main() {
     // Kiểm tra CUDA device
     int deviceCount = 0;
@@ -568,11 +543,8 @@ int main() {
     CHECK_CUDA_ERROR(cudaGetDeviceProperties(&deviceProp, 0));
     printf("Sử dụng GPU: %s\n", deviceProp.name);
     
-    // Chạy demo mã hóa
-    demo_ascon_gpu_optimized();
-
-    // Chạy demo giải mã
-    demo_ascon_gpu_decrypt_optimized();
+    // Chạy demo mã hóa và giải mã
+    demo_ascon_gpu_encrypt_decrypt();
     
     return 0;
 }
